@@ -12,8 +12,8 @@ export default async function PublicBioPage({
   const data = await getHandleData(params.handle);
   if (!data) notFound();
 
-  const { uid, groups, token } = data;
-  const username = token?.ig_username ?? params.handle;
+  const { uid, groups } = data;
+const username = params.handle;
   const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   return (
