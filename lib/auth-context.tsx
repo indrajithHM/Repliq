@@ -30,38 +30,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const auth = getAuthInstance();
+  const auth = getAuthInstance();
 
-    setPersistence(auth, browserSessionPersistence)
-      .then(() => {
-        // Handle redirect result on page load
-        getRedirectResult(auth)
-          .then(result => {
-            if (result?.user) {
-              setUser(result.user);
-            }
-          })
-          .catch(e => console.error("Redirect result error:", e));
-
-        const unsubscribe = onAuthStateChanged(
-          auth,
-          (firebaseUser) => {
-            setUser(firebaseUser);
-            setLoading(false);
-          },
-          (error) => {
-            console.error("Auth state error:", error);
-            setLoading(false);
+  setPersistence(auth, browserSessionPersistence)
+    .then(() => {
+      // Keep loading=true until redirect result is checked
+      getRedirectResult(auth)
+        .then(result => {
+          if (result?.user) {
+            setUser(result.user);
           }
-        );
-
-        return () => unsubscribe();
-      })
-      .catch((error) => {
-        console.error("Persistence error:", error);
-        setLoading(false);
-      });
-  }, []);
+        })
+        .catch(e => console.error("Redirect result error:", e))
+        .finally(() => {
+          // Only set up auth listener after redirect result is handled
+          const unsubscribe = onAuthStateChanged(
+            auth,
+            (firebaseUser) => {
+              setUser(firebaseUser);
+              setLoading(false);
+            },
+            (error) => {
+              console.error("Auth state error:", error);
+              setLoading(false);
+            }
+          );
+          // Store unsubscribe for cleanup
+          return () => unsubscribe();
+        });
+    })
+    .catch((error) => {
+      console.error("Persistence error:", error);
+      setLoading(false);
+    });
+}, []);
 
   const signIn = async () => {
     try {
