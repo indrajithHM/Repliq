@@ -2,8 +2,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { 
   onAuthStateChanged, 
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut, 
   User,
   browserSessionPersistence,
@@ -30,47 +29,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-  const auth = getAuthInstance();
-
-  setPersistence(auth, browserSessionPersistence)
-    .then(() => {
-      // Keep loading=true until redirect result is checked
-      getRedirectResult(auth)
-        .then(result => {
-          if (result?.user) {
-            setUser(result.user);
+    const auth = getAuthInstance();
+    setPersistence(auth, browserSessionPersistence)
+      .then(() => {
+        const unsubscribe = onAuthStateChanged(
+          auth,
+          (firebaseUser) => {
+            setUser(firebaseUser);
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Auth state error:", error);
+            setLoading(false);
           }
-        })
-        .catch(e => console.error("Redirect result error:", e))
-        .finally(() => {
-          // Only set up auth listener after redirect result is handled
-          const unsubscribe = onAuthStateChanged(
-            auth,
-            (firebaseUser) => {
-              setUser(firebaseUser);
-              setLoading(false);
-            },
-            (error) => {
-              console.error("Auth state error:", error);
-              setLoading(false);
-            }
-          );
-          // Store unsubscribe for cleanup
-          return () => unsubscribe();
-        });
-    })
-    .catch((error) => {
-      console.error("Persistence error:", error);
-      setLoading(false);
-    });
-}, []);
+        );
+        return () => unsubscribe();
+      })
+      .catch((error) => {
+        console.error("Persistence error:", error);
+        setLoading(false);
+      });
+  }, []);
 
   const signIn = async () => {
     try {
-      await signInWithRedirect(getAuthInstance(), googleProvider);
-      // Page will redirect to Google and come back — no result here
+      await signInWithPopup(getAuthInstance(), googleProvider);
     } catch (error: any) {
-      console.error("Sign-in error:", error.code, error.message);
+      if (error.code !== "auth/popup-closed-by-user") {
+        console.error("Sign-in error:", error.code, error.message);
+      }
     }
   };
 
