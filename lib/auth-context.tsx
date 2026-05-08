@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { 
   onAuthStateChanged, 
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut, 
   User,
   browserSessionPersistence,
@@ -30,8 +31,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const auth = getAuthInstance();
-    setPersistence(auth, browserSessionPersistence)
-      .then(() => {
+
+    const init = async () => {
+      try {
+        await setPersistence(auth, browserSessionPersistence);
+
+        // Check for redirect result first
+        try {
+          const result = await getRedirectResult(auth);
+          if (result?.user) {
+            setUser(result.user);
+            setLoading(false);
+            window.location.href = "/dashboard";
+            return;
+          }
+        } catch (e) {
+          console.error("Redirect result error:", e);
+        }
+
+        // Normal auth state listener
         const unsubscribe = onAuthStateChanged(
           auth,
           (firebaseUser) => {
@@ -43,21 +61,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
           }
         );
-        return () => unsubscribe();
-      })
-      .catch((error) => {
-        console.error("Persistence error:", error);
+
+        return unsubscribe;
+      } catch (error) {
+        console.error("Auth init error:", error);
         setLoading(false);
-      });
+      }
+    };
+
+    const cleanup = init();
+    return () => { cleanup.then(unsub => unsub?.()); };
   }, []);
 
   const signIn = async () => {
     try {
-      await signInWithPopup(getAuthInstance(), googleProvider);
+      await signInWithRedirect(getAuthInstance(), googleProvider);
     } catch (error: any) {
-      if (error.code !== "auth/popup-closed-by-user") {
-        console.error("Sign-in error:", error.code, error.message);
-      }
+      console.error("Sign-in error:", error.code, error.message);
     }
   };
 
