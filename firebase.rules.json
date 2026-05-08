@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "handles": {
+      ".read": true,
+      "$handle": {
+        ".write": "auth !== null"
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read":  "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        "biopage": {
+          "links": {
+            ".read": true
+          }
+        }
+      }
+    }
+  }
+}
