@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { 
   onAuthStateChanged, 
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut, 
   User,
   browserSessionPersistence,
@@ -31,16 +32,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const auth = getAuthInstance();
 
-    // Set persistence first
     setPersistence(auth, browserSessionPersistence)
       .then(() => {
-        //console.log("📌 Auth persistence set to session");
-        
-        // Now listen for auth state
+        // Handle redirect result on page load
+        getRedirectResult(auth)
+          .then(result => {
+            if (result?.user) {
+              setUser(result.user);
+            }
+          })
+          .catch(e => console.error("Redirect result error:", e));
+
         const unsubscribe = onAuthStateChanged(
           auth,
           (firebaseUser) => {
-            //console.log("🔄 Auth state changed:", firebaseUser?.email || "No user");
             setUser(firebaseUser);
             setLoading(false);
           },
@@ -60,24 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async () => {
     try {
-      //console.log("🔑 Starting sign-in with popup...");
-      const result = await signInWithPopup(getAuthInstance(), googleProvider);
-      //console.log("✅ Sign-in successful:", result.user.email);
-      // onAuthStateChanged will handle updating the user state
+      await signInWithRedirect(getAuthInstance(), googleProvider);
+      // Page will redirect to Google and come back — no result here
     } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user') {
-        //console.log("User closed the popup");
-      } else {
-        console.error("Sign-in error:", error.code, error.message);
-      }
+      console.error("Sign-in error:", error.code, error.message);
     }
   };
 
   const logOut = async () => {
     try {
       await signOut(getAuthInstance());
-     // console.log("👋 Signed out");
-      // onAuthStateChanged will handle updating the user state
     } catch (error) {
       console.error("Sign-out error:", error);
     }
