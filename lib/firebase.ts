@@ -296,18 +296,23 @@ export const incrementLinkClick = async (uid: string, linkId: string) => {
 
 /* ── Find UID by Instagram ID ────────────────────────────────────── */
 export const findUidByIgUserId = async (igUserId: string): Promise<string | null> => {
+  console.log("→ findUidByIgUserId looking for:", igUserId);
   const s = await get(ref(getDb(), "users"));
-  if (!s.exists()) return null;
-  for (const [uid, data] of Object.entries(
-    s.val() as Record<string, { tokens?: IgToken }>
-  )) {
-    const token = data.tokens;
-    if (!token) continue;
-    // Match against ig_user_id, ig_page_id, or any stored ID
-    if (
-      token.ig_user_id === igUserId ||
-      token.ig_page_id === igUserId
-    ) return uid;
+  if (!s.exists()) {
+    console.log("→ No users in Firebase");
+    return null;
   }
+  const users = s.val() as Record<string, { tokens?: IgToken }>;
+  console.log("→ Total users:", Object.keys(users).length);
+  for (const [uid, data] of Object.entries(users)) {
+    const token = data.tokens;
+    console.log(`→ uid: ${uid}, ig_user_id: ${token?.ig_user_id}, ig_page_id: ${token?.ig_page_id}`);
+    if (!token) continue;
+    if (token.ig_user_id === igUserId || token.ig_page_id === igUserId) {
+      console.log("→ MATCH:", uid);
+      return uid;
+    }
+  }
+  console.log("→ No match found");
   return null;
 };
