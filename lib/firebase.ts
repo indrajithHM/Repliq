@@ -52,8 +52,13 @@ export interface IgToken {
   ig_username:  string;
   expires_at:   number;
 }
-export const saveToken = (uid: string, data: IgToken) =>
-  set(ref(getDb(), `users/${uid}/tokens`), data);
+export const saveToken = async (uid: string, data: IgToken) => {
+  await set(ref(getDb(), `users/${uid}/tokens`), data);
+  // Also save page ID index for fast webhook lookup
+  if (data.ig_page_id) {
+    await set(ref(getDb(), `igPageIndex/${data.ig_page_id}`), uid);
+  }
+};
 export const getToken = async (uid: string): Promise<IgToken | null> => {
   const s = await get(ref(getDb(), `users/${uid}/tokens`));
   return s.exists() ? (s.val() as IgToken) : null;
@@ -297,22 +302,25 @@ export const incrementLinkClick = async (uid: string, linkId: string) => {
 /* ── Find UID by Instagram ID ────────────────────────────────────── */
 export const findUidByIgUserId = async (igUserId: string): Promise<string | null> => {
   console.log("→ findUidByIgUserId looking for:", igUserId);
-  const s = await get(ref(getDb(), "users"));
-  if (!s.exists()) {
-    console.log("→ No users in Firebase");
-    return null;
+
+  // Check page ID index first (fast lookup)
+  const pageSnap = await get(ref(getDb(), `igPageIndex/${igUserId}`));
+  if (pageSnap.exists()) {
+    console.log("→ Found via igPageIndex:", pageSnap.val());
+    return pageSnap.val() as string;
   }
-  const users = s.val() as Record<string, { tokens?: IgToken }>;
-  console.log("→ Total users:", Object.keys(users).length);
-  for (const [uid, data] of Object.entries(users)) {
+
+  // Fall back to scanning users by ig_user_id
+  const s = await get(ref(getDb(), "users"));
+  if (!s.exists()) return null;
+  for (const [uid, data] of Object.entries(
+    s.val() as Record<string, { tokens?: IgToken }>
+  )) {
     const token = data.tokens;
-    console.log(`→ uid: ${uid}, ig_user_id: ${token?.ig_user_id}, ig_page_id: ${token?.ig_page_id}`);
     if (!token) continue;
     if (token.ig_user_id === igUserId || token.ig_page_id === igUserId) {
-      console.log("→ MATCH:", uid);
       return uid;
     }
   }
-  console.log("→ No match found");
   return null;
 };
