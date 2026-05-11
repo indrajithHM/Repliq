@@ -61,7 +61,6 @@ export async function getIgProfile(accessToken: string, igUserId: string) {
   if (!res.ok) throw new Error(data.error?.message ?? "Failed to fetch profile");
   return data as { id: string; username: string; profile_picture_url?: string; followers_count?: number };
 }
-
 export async function exchangeCodeForToken(code: string, redirectUri: string) {
   // Step 1: short-lived token
   const params = new URLSearchParams({
@@ -75,7 +74,6 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
     method: "POST", body: params,
   });
   const data = await res.json();
-  console.log("Short-lived token response:", data);
   if (!res.ok) throw new Error(data.error_message ?? "Token exchange failed");
 
   // Step 2: long-lived token
@@ -83,38 +81,20 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
     `${GRAPH}/access_token?grant_type=ig_exchange_token&client_secret=${IG_APP_SECRET}&access_token=${data.access_token}`
   );
   const llData = await llRes.json();
-  console.log("Long-lived token response:", llData);
   if (!llRes.ok) throw new Error(llData.error?.message ?? "Long-lived token exchange failed");
 
-  // Step 3: fetch profile using /me
-  const profileRes = await fetch(
-    `${GRAPH}/me?fields=id,username&access_token=${llData.access_token}`
-  );
-  const profile = await profileRes.json();
-  console.log("Profile response:", profile);
-  if (profile.error) throw new Error(profile.error.message ?? "Failed to fetch profile");
-
-  // Step 4: try to get the page/business account ID
-  // The webhook sends entry.id which is the Instagram Business Account ID
-  // For Instagram Login flow this is the same as profile.id but we log it to confirm
-  const accountRes = await fetch(
-    `https://graph.instagram.com/v21.0/${profile.id}?fields=id,username&access_token=${llData.access_token}`
-  );
-  const accountData = await accountRes.json();
-  console.log("Account data:", JSON.stringify(accountData));
-
-  // Also try the /me endpoint with more fields to find page_id
+  // Step 3: fetch profile + page ID
   const meRes = await fetch(
     `${GRAPH}/me?fields=id,username,user_id&access_token=${llData.access_token}`
   );
   const meData = await meRes.json();
-  console.log("Me extended data:", JSON.stringify(meData));
+  if (meData.error) throw new Error(meData.error.message ?? "Failed to fetch profile");
 
   return {
     access_token: llData.access_token as string,
-    ig_user_id:   profile.id as string,
-    ig_page_id:   profile.id as string, // store same as ig_user_id for now
-    ig_username:  profile.username as string,
+    ig_user_id:   meData.id as string,
+    ig_page_id:   meData.user_id as string, // matches webhook entry.id
+    ig_username:  meData.username as string,
     expires_at:   Date.now() + (llData.expires_in as number) * 1000,
   };
 }
