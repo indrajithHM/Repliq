@@ -7,7 +7,7 @@ import {
   savePending, getPendingByCommenter, deletePending,
   findUidByIgUserId, Rule, IgToken,
 } from "@/lib/firebase";
-import { sendDm, checkFollower, matchComment } from "@/lib/instagram";
+import { sendDm, matchComment } from "@/lib/instagram";
 
 /* ── GET: webhook verification ─────────────────────────────────── */
 export async function GET(req: NextRequest) {
@@ -107,9 +107,6 @@ async function handleComment(value: CommentPayload, igPageId: string) {
 
   const rules = await getRules(uid);
   console.log("→ Rules count:", rules.length);
-  console.log("→ Rules:", JSON.stringify(rules.map(r => ({
-    id: r.id, postId: r.postId, active: r.active, matchMode: r.matchMode, keywords: r.keywords
-  }))));
 
   const matched = rules.find(
     r => r.active && r.postId === postId &&
@@ -122,29 +119,71 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   console.log("→ Already DMed:", alreadySent);
   if (alreadySent) return;
 
-  const isFollower = await checkFollower(token.access_token, token.ig_user_id, commenterId);
-  console.log("→ Is follower:", isFollower);
-
-  if (!isFollower) {
-    const followMsg =
-      "Hey! 👋 Thanks for your comment. " +
-      "Please follow our account first and we'll send you the message right away! 🙌";
-    await safeSendDm(token, commenterId, followMsg);
-    await logDm(uid, {
-      commenterId, commenterUsername, postId,
-      ruleId: matched.id!, sentAt: Date.now(),
-      status: "sent", type: "follow_prompt",
-    });
-    await savePending(uid, {
-      commenterId, postId, uid,
-      ruleId: matched.id!,
-      expiresAt: Date.now() + matched.pendingExpiry * 3_600_000,
-    });
-    return;
-  }
-
+  // Skip follower check — not supported by Instagram Login API
+  // Send DM directly to everyone who comments
   await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched);
 }
+// async function handleComment(value: CommentPayload, igPageId: string) {
+//   const commentText       = value.text ?? "";
+//   const commenterId       = value.from?.id ?? "";
+//   const commenterUsername = value.from?.username ?? "unknown";
+//   const postId            = value.media?.id ?? "";
+
+//   console.log("→ handleComment:", { commentText, commenterId, postId, igPageId });
+
+//   if (!commenterId || !postId) {
+//     console.log("→ Missing commenterId or postId, skipping");
+//     return;
+//   }
+
+//   const uid = await findUidByIgUserId(igPageId);
+//   console.log("→ Found uid:", uid);
+//   if (!uid) return;
+
+//   const token = await getToken(uid);
+//   console.log("→ Token exists:", !!token, "ig_user_id:", token?.ig_user_id);
+//   if (!token) return;
+
+//   const rules = await getRules(uid);
+//   console.log("→ Rules count:", rules.length);
+//   console.log("→ Rules:", JSON.stringify(rules.map(r => ({
+//     id: r.id, postId: r.postId, active: r.active, matchMode: r.matchMode, keywords: r.keywords
+//   }))));
+
+//   const matched = rules.find(
+//     r => r.active && r.postId === postId &&
+//          matchComment(commentText, r.matchMode, r.keywords ?? [])
+//   );
+//   console.log("→ Matched rule:", matched?.id ?? "none");
+//   if (!matched) return;
+
+//   const alreadySent = await alreadyDmed(uid, commenterId, postId);
+//   console.log("→ Already DMed:", alreadySent);
+//   if (alreadySent) return;
+
+//   const isFollower = await checkFollower(token.access_token, token.ig_user_id, commenterId);
+//   console.log("→ Is follower:", isFollower);
+
+//   if (!isFollower) {
+//     const followMsg =
+//       "Hey! 👋 Thanks for your comment. " +
+//       "Please follow our account first and we'll send you the message right away! 🙌";
+//     await safeSendDm(token, commenterId, followMsg);
+//     await logDm(uid, {
+//       commenterId, commenterUsername, postId,
+//       ruleId: matched.id!, sentAt: Date.now(),
+//       status: "sent", type: "follow_prompt",
+//     });
+//     await savePending(uid, {
+//       commenterId, postId, uid,
+//       ruleId: matched.id!,
+//       expiresAt: Date.now() + matched.pendingExpiry * 3_600_000,
+//     });
+//     return;
+//   }
+
+//   await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched);
+// }
 
 /* ── Follow handler ─────────────────────────────────────────────── */
 async function handleFollow(followerId: string, igPageId: string) {
