@@ -48,6 +48,7 @@ function getDb(): Database {
 export interface IgToken {
   access_token: string;
   ig_user_id:   string;
+  ig_page_id?:  string; // webhook entry.id — may differ from ig_user_id
   ig_username:  string;
   expires_at:   number;
 }
@@ -184,7 +185,6 @@ export const getGroups = async (uid: string): Promise<BioGroup[]> => {
 };
 
 /* ── Group Links CRUD ────────────────────────────────────────────── */
-// Path: users/{uid}/biopage/grouplinks/{groupId}/{linkId}
 export const saveGroupLink = async (
   uid: string, groupId: string, link: Omit<BioLink, "id" | "clicks">
 ) => {
@@ -243,7 +243,6 @@ export const getHandleData = async (handle: string) => {
   const [groupsSnap, grouplinksSnap] = await Promise.all([
     get(ref(getDb(), `users/${uid}/biopage/groups`)),
     get(ref(getDb(), `users/${uid}/biopage/grouplinks`)),
-    // removed token fetch — not needed on public page
   ]);
 
   const grouplinks = grouplinksSnap.exists()
@@ -268,9 +267,10 @@ export const getHandleData = async (handle: string) => {
   return {
     uid,
     groups,
-    token: null, // username comes from handle param directly
+    token: null as IgToken | null,
   };
 };
+
 /* ── Legacy flat links (backward compat) ─────────────────────────── */
 export const saveBioLink = async (uid: string, link: Omit<BioLink, "id" | "clicks">) => {
   const r = push(ref(getDb(), `users/${uid}/biopage/links`));
@@ -294,13 +294,20 @@ export const incrementLinkClick = async (uid: string, linkId: string) => {
   );
 };
 
+/* ── Find UID by Instagram ID ────────────────────────────────────── */
 export const findUidByIgUserId = async (igUserId: string): Promise<string | null> => {
   const s = await get(ref(getDb(), "users"));
   if (!s.exists()) return null;
   for (const [uid, data] of Object.entries(
     s.val() as Record<string, { tokens?: IgToken }>
   )) {
-    if (data.tokens?.ig_user_id === igUserId) return uid;
+    const token = data.tokens;
+    if (!token) continue;
+    // Match against ig_user_id, ig_page_id, or any stored ID
+    if (
+      token.ig_user_id === igUserId ||
+      token.ig_page_id === igUserId
+    ) return uid;
   }
   return null;
 };
