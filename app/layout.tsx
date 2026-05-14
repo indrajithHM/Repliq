@@ -5,6 +5,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Repliq",
   description: "Instagram AutoDM automation",
+  icons: {
+    icon: "/Repliq.png",
+  },
 };
 
 export default function RootLayout({

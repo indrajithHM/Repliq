@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { LayoutDashboard, Wifi, ImageIcon, Zap, BookOpen, Link2, LogOut } from "lucide-react";
+import Image from "next/image";
 
 const NAV = [
   { href: "/dashboard",         icon: LayoutDashboard, label: "Dashboard"    },
@@ -27,7 +28,7 @@ export default function Sidebar() {
       position: "sticky", top: 0, overflow: "hidden",
     }}>
       {/* Logo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", marginBottom: 28 }}>
+      {/* <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", marginBottom: 28 }}>
         <div style={{
           width: 34, height: 34, borderRadius: 10, flexShrink: 0,
           background: "linear-gradient(135deg,#FF4D6A,#FF7A3D)",
@@ -37,7 +38,25 @@ export default function Sidebar() {
         <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "-0.03em" }}>
           Repl<span style={{ color: "#FF4D6A" }}>iq</span>
         </span>
-      </div>
+      </div> */}
+      {/* Logo */}
+
+
+{/* Logo */}
+<div style={{ padding: "6px 10px", marginBottom: 12,display: "flex", justifyContent: "center"  }}>
+  <Image
+    src="/Repliq.png"
+    alt="Repliq"
+    width={120}
+    height={50}
+    style={{ 
+      width: 100, 
+      height: 100, 
+      objectFit: "contain",
+      borderRadius: 100,
+    }}
+  />
+</div>
 
       {/* Nav */}
       <nav style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>

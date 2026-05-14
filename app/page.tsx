@@ -2,6 +2,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import Image from "next/image";
 
 export default function LoginPage() {
   const { user, loading, signIn } = useAuth();
@@ -30,16 +31,20 @@ export default function LoginPage() {
 
       <div className="animate-fade-up" style={{ textAlign:"center",maxWidth:420,width:"100%",padding:"0 24px" }}>
         {/* Mark */}
-        <div style={{
-          width:72,height:72,borderRadius:20,margin:"0 auto 28px",fontSize:32,
-          background:"linear-gradient(135deg,#FF4D6A,#FF7A3D)",
-          display:"flex",alignItems:"center",justifyContent:"center",
-          boxShadow:"0 20px 60px rgba(255,77,106,0.3)",
-        }}>⚡</div>
-
-        <h1 style={{ fontSize:44,fontWeight:800,letterSpacing:"-0.04em",lineHeight:1.1,marginBottom:12 }}>
-          Repl<span style={{ color:"#FF4D6A" }}>iq</span>
-        </h1>
+        <div style={{ padding: "6px 10px", marginBottom: 12,display: "flex", justifyContent: "center"  }}>
+          <Image
+            src="/Repliq.png"
+            alt="Repliq"
+            width={120}
+            height={50}
+            style={{ 
+              width: 120, 
+              height: 120, 
+              objectFit: "contain",
+              borderRadius: 100,
+            }}
+          />
+        </div>
         <p style={{ color:"var(--text2)",fontSize:16,lineHeight:1.65,marginBottom:44 }}>
           Turn every comment into a conversation.<br/>Instagram automation, done right.
         </p>
