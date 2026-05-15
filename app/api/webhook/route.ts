@@ -1,4 +1,3 @@
-/* ── GET: webhook verification ─────────────────────────────────── */
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
@@ -47,11 +46,11 @@ export async function POST(req: NextRequest) {
   const body = JSON.parse(rawBody);
   console.log("→ Parsed body:", JSON.stringify(body, null, 2));
 
-  for (const entry of (body.entry ?? []) as Record<string,unknown>[]) {
+  for (const entry of (body.entry ?? []) as Record<string, unknown>[]) {
     const igPageId = entry.id as string;
     console.log("→ Entry igPageId:", igPageId);
 
-    for (const change of (entry.changes ?? []) as { field:string; value:unknown }[]) {
+    for (const change of (entry.changes ?? []) as { field: string; value: unknown }[]) {
       console.log("→ Change field:", change.field, "value:", JSON.stringify(change.value));
       if (change.field === "comments") {
         await handleComment(change.value as CommentPayload, igPageId).catch(e => {
@@ -67,7 +66,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    for (const msg of (entry.messaging ?? []) as { follow?: boolean; sender: { id:string } }[]) {
+    for (const msg of (entry.messaging ?? []) as { follow?: boolean; sender: { id: string } }[]) {
       if (msg.follow) {
         await handleFollow(msg.sender.id, igPageId).catch(console.error);
       }
@@ -79,10 +78,11 @@ export async function POST(req: NextRequest) {
 
 /* ── Comment handler ────────────────────────────────────────────── */
 interface CommentPayload {
-  id?: string;
-  text?: string;
-  from?: { id:string; username?:string };
-  media?: { id:string };
+  id?:        string;
+  text?:      string;
+  from?:      { id: string; username?: string };
+  media?:     { id: string };
+  parent_id?: string;
 }
 
 async function handleComment(value: CommentPayload, igPageId: string) {
@@ -90,9 +90,15 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   const commenterId       = value.from?.id ?? "";
   const commenterUsername = value.from?.username ?? "unknown";
   const postId            = value.media?.id ?? "";
-  const commentId         = value.id ?? ""; 
+  const commentId         = value.id ?? "";
 
   console.log("→ handleComment:", { commentText, commenterId, postId, igPageId });
+
+  // Skip reply comments — these are replies to comments (including our own auto-replies)
+  if (value.parent_id) {
+    console.log("→ Skipping reply comment (has parent_id)");
+    return;
+  }
 
   if (!commenterId || !postId) {
     console.log("→ Missing commenterId or postId, skipping");
@@ -106,6 +112,12 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   const token = await getToken(uid);
   console.log("→ Token exists:", !!token, "ig_user_id:", token?.ig_user_id);
   if (!token) return;
+
+  // Skip if commenter is the page owner (own comments)
+  if (commenterId === igPageId || commenterId === token.ig_user_id) {
+    console.log("→ Skipping own comment");
+    return;
+  }
 
   const rules = await getRules(uid);
   console.log("→ Rules count:", rules.length);
@@ -121,71 +133,8 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   console.log("→ Already DMed:", alreadySent);
   if (alreadySent) return;
 
-  // Skip follower check — not supported by Instagram Login API
-  // Send DM directly to everyone who comments
-  await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched, commentId );
+  await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched, commentId);
 }
-// async function handleComment(value: CommentPayload, igPageId: string) {
-//   const commentText       = value.text ?? "";
-//   const commenterId       = value.from?.id ?? "";
-//   const commenterUsername = value.from?.username ?? "unknown";
-//   const postId            = value.media?.id ?? "";
-
-//   console.log("→ handleComment:", { commentText, commenterId, postId, igPageId });
-
-//   if (!commenterId || !postId) {
-//     console.log("→ Missing commenterId or postId, skipping");
-//     return;
-//   }
-
-//   const uid = await findUidByIgUserId(igPageId);
-//   console.log("→ Found uid:", uid);
-//   if (!uid) return;
-
-//   const token = await getToken(uid);
-//   console.log("→ Token exists:", !!token, "ig_user_id:", token?.ig_user_id);
-//   if (!token) return;
-
-//   const rules = await getRules(uid);
-//   console.log("→ Rules count:", rules.length);
-//   console.log("→ Rules:", JSON.stringify(rules.map(r => ({
-//     id: r.id, postId: r.postId, active: r.active, matchMode: r.matchMode, keywords: r.keywords
-//   }))));
-
-//   const matched = rules.find(
-//     r => r.active && r.postId === postId &&
-//          matchComment(commentText, r.matchMode, r.keywords ?? [])
-//   );
-//   console.log("→ Matched rule:", matched?.id ?? "none");
-//   if (!matched) return;
-
-//   const alreadySent = await alreadyDmed(uid, commenterId, postId);
-//   console.log("→ Already DMed:", alreadySent);
-//   if (alreadySent) return;
-
-//   const isFollower = await checkFollower(token.access_token, token.ig_user_id, commenterId);
-//   console.log("→ Is follower:", isFollower);
-
-//   if (!isFollower) {
-//     const followMsg =
-//       "Hey! 👋 Thanks for your comment. " +
-//       "Please follow our account first and we'll send you the message right away! 🙌";
-//     await safeSendDm(token, commenterId, followMsg);
-//     await logDm(uid, {
-//       commenterId, commenterUsername, postId,
-//       ruleId: matched.id!, sentAt: Date.now(),
-//       status: "sent", type: "follow_prompt",
-//     });
-//     await savePending(uid, {
-//       commenterId, postId, uid,
-//       ruleId: matched.id!,
-//       expiresAt: Date.now() + matched.pendingExpiry * 3_600_000,
-//     });
-//     return;
-//   }
-
-//   await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched);
-// }
 
 /* ── Follow handler ─────────────────────────────────────────────── */
 async function handleFollow(followerId: string, igPageId: string) {
@@ -207,8 +156,9 @@ async function handleFollow(followerId: string, igPageId: string) {
 async function deliverActualDm(
   uid: string, token: IgToken,
   commenterId: string, commenterUsername: string,
-  postId: string, rule: Rule, commentId?: string 
+  postId: string, rule: Rule, commentId?: string
 ) {
+  // Reply to comment first (before DM)
   if (rule.replyEnabled && rule.replyTemplate && commentId) {
     try {
       await replyToComment(token.access_token, commentId, rule.replyTemplate);
@@ -227,7 +177,7 @@ async function deliverActualDm(
       ruleId: rule.id!, sentAt: Date.now(),
       status: "sent", type: "actual",
     });
-    
+
     if (rule.nudgeEnabled && rule.nudgeMessage) {
       await delay((rule.nudgeDelay ?? 3) * 1000);
       await safeSendDm(token, commenterId, rule.nudgeMessage);
