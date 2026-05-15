@@ -13,6 +13,7 @@ const DEFAULT: FormState = {
   matchMode:"word_match", keywords:[],
   dmTemplate:"", nudgeMessage:"💫 Loved this? Share the post with your friends and don't forget to hit like — it really helps! ❤️",
   nudgeEnabled:true, nudgeDelay:3, pendingExpiry:48, active:true,
+  replyEnabled:false, replyTemplate:"Thanks for commenting! Check your DMs 📩",
 };
 
 const MODE_INFO: Record<MatchMode,{label:string;desc:string;color:string}> = {
@@ -83,6 +84,8 @@ function RulesInner() {
       dmTemplate: r.dmTemplate, nudgeMessage: r.nudgeMessage,
       nudgeEnabled: r.nudgeEnabled, nudgeDelay: r.nudgeDelay,
       pendingExpiry: r.pendingExpiry, active: r.active,
+      replyEnabled: r.replyEnabled ?? false,
+      replyTemplate: r.replyTemplate ?? "Thanks for commenting! Check your DMs 📩",
     });
     setEditId(r.id!); setShowForm(true);
   };
@@ -191,6 +194,33 @@ function RulesInner() {
               placeholder="Hey! Thanks for commenting. Here's what you asked for: https://…"/>
           </div>
 
+          {/* ── Public comment reply ── */}
+          <div style={{ marginBottom:18 }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
+              <div>
+                <label className="label" style={{ margin:0 }}>Public comment reply</label>
+                <p style={{ fontSize:11,color:"var(--text3)",marginTop:2 }}>
+                  Visible reply posted under the comment on your post
+                </p>
+              </div>
+              <label className="toggle">
+                <input type="checkbox" checked={form.replyEnabled}
+                  onChange={e=>setForm(f=>({...f,replyEnabled:e.target.checked}))}/>
+                <span className="toggle-slider"/>
+              </label>
+            </div>
+            {form.replyEnabled && (
+              <input
+                className="input"
+                value={form.replyTemplate}
+                onChange={e=>setForm(f=>({...f,replyTemplate:e.target.value}))}
+                placeholder="e.g. Thanks for commenting! Check your DMs 📩"
+                maxLength={1000}
+              />
+            )}
+          </div>
+
+          {/* ── Engagement nudge ── */}
           <div style={{ marginBottom:18 }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
               <label className="label" style={{ margin:0 }}>Engagement nudge (2nd DM)</label>
@@ -266,6 +296,11 @@ function RulesInner() {
                       <p style={{ fontSize:13,color:"var(--text2)",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                         ✉️ {rule.dmTemplate}
                       </p>
+                      {rule.replyEnabled && rule.replyTemplate && (
+                        <p style={{ fontSize:11,color:"var(--text3)",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                          💬 Reply · "{rule.replyTemplate.length > 50 ? rule.replyTemplate.slice(0,50)+"…" : rule.replyTemplate}"
+                        </p>
+                      )}
                       {rule.nudgeEnabled && (
                         <p style={{ fontSize:11,color:"var(--text3)" }}>💫 Nudge · {rule.nudgeDelay}s delay</p>
                       )}

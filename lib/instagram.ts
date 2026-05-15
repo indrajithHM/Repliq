@@ -32,6 +32,24 @@ export async function sendDm(
   return data;
 }
 
+export async function replyToComment(
+  accessToken: string,
+  commentId: string,
+  message: string
+) {
+  const res = await fetch(`${GRAPH}/${commentId}/replies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      access_token: accessToken,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message ?? "Failed to reply to comment");
+  return data;
+}
+
 export async function checkFollower(
   accessToken: string, igUserId: string, targetIgId: string
 ): Promise<boolean> {
@@ -61,6 +79,7 @@ export async function getIgProfile(accessToken: string, igUserId: string) {
   if (!res.ok) throw new Error(data.error?.message ?? "Failed to fetch profile");
   return data as { id: string; username: string; profile_picture_url?: string; followers_count?: number };
 }
+
 export async function exchangeCodeForToken(code: string, redirectUri: string) {
   // Step 1: short-lived token
   const params = new URLSearchParams({
@@ -83,19 +102,20 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
   const llData = await llRes.json();
   if (!llRes.ok) throw new Error(llData.error?.message ?? "Long-lived token exchange failed");
 
-  // Step 3: fetch profile + page ID
+  // Step 3: fetch profile + page ID + profile picture
   const meRes = await fetch(
-    `${GRAPH}/me?fields=id,username,user_id&access_token=${llData.access_token}`
+    `${GRAPH}/me?fields=id,username,user_id,profile_picture_url&access_token=${llData.access_token}`
   );
   const meData = await meRes.json();
   if (meData.error) throw new Error(meData.error.message ?? "Failed to fetch profile");
 
   return {
-    access_token: llData.access_token as string,
-    ig_user_id:   meData.id as string,
-    ig_page_id:   meData.user_id as string, // matches webhook entry.id
-    ig_username:  meData.username as string,
-    expires_at:   Date.now() + (llData.expires_in as number) * 1000,
+    access_token:        llData.access_token as string,
+    ig_user_id:          meData.id as string,
+    ig_page_id:          meData.user_id as string,
+    ig_username:         meData.username as string,
+    expires_at:          Date.now() + (llData.expires_in as number) * 1000,
+    profile_picture_url: meData.profile_picture_url as string | undefined,
   };
 }
 

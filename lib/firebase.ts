@@ -51,6 +51,7 @@ export interface IgToken {
   ig_page_id?:  string; // webhook entry.id — may differ from ig_user_id
   ig_username:  string;
   expires_at:   number;
+  profile_picture_url?: string;
 }
 export const saveToken = async (uid: string, data: IgToken) => {
   await set(ref(getDb(), `users/${uid}/tokens`), data);
@@ -82,6 +83,8 @@ export interface Rule {
   pendingExpiry: number;
   active:        boolean;
   createdAt:     number;
+  replyEnabled: boolean;
+  replyTemplate: string; 
 }
 export const saveRule = async (uid: string, rule: Omit<Rule, "id">) => {
   const r = push(ref(getDb(), `users/${uid}/rules`));

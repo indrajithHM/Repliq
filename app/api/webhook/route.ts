@@ -7,7 +7,7 @@ import {
   savePending, getPendingByCommenter, deletePending,
   findUidByIgUserId, Rule, IgToken,
 } from "@/lib/firebase";
-import { sendDm, matchComment } from "@/lib/instagram";
+import { sendDm, matchComment, replyToComment } from "@/lib/instagram";
 
 /* ── GET: webhook verification ─────────────────────────────────── */
 export async function GET(req: NextRequest) {
@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
 
 /* ── Comment handler ────────────────────────────────────────────── */
 interface CommentPayload {
+  id?: string;
   text?: string;
   from?: { id:string; username?:string };
   media?: { id:string };
@@ -89,6 +90,7 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   const commenterId       = value.from?.id ?? "";
   const commenterUsername = value.from?.username ?? "unknown";
   const postId            = value.media?.id ?? "";
+  const commentId         = value.id ?? ""; 
 
   console.log("→ handleComment:", { commentText, commenterId, postId, igPageId });
 
@@ -121,7 +123,7 @@ async function handleComment(value: CommentPayload, igPageId: string) {
 
   // Skip follower check — not supported by Instagram Login API
   // Send DM directly to everyone who comments
-  await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched);
+  await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched, commentId );
 }
 // async function handleComment(value: CommentPayload, igPageId: string) {
 //   const commentText       = value.text ?? "";
@@ -205,8 +207,17 @@ async function handleFollow(followerId: string, igPageId: string) {
 async function deliverActualDm(
   uid: string, token: IgToken,
   commenterId: string, commenterUsername: string,
-  postId: string, rule: Rule
+  postId: string, rule: Rule, commentId?: string 
 ) {
+  if (rule.replyEnabled && rule.replyTemplate && commentId) {
+    try {
+      await replyToComment(token.access_token, commentId, rule.replyTemplate);
+      console.log("→ Comment reply sent");
+    } catch (e) {
+      console.error("→ Comment reply failed:", e);
+    }
+  }
+
   console.log("→ deliverActualDm to:", commenterId, "rule:", rule.id);
   try {
     await safeSendDm(token, commenterId, rule.dmTemplate);
@@ -216,6 +227,7 @@ async function deliverActualDm(
       ruleId: rule.id!, sentAt: Date.now(),
       status: "sent", type: "actual",
     });
+    
     if (rule.nudgeEnabled && rule.nudgeMessage) {
       await delay((rule.nudgeDelay ?? 3) * 1000);
       await safeSendDm(token, commenterId, rule.nudgeMessage);

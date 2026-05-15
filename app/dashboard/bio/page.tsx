@@ -4,8 +4,9 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getGroupsWithLinks, saveGroup, updateGroup, deleteGroup,
   saveGroupLink, updateGroupLink, deleteGroupLink,
-  getToken, BioGroup, BioLink, BioGroupWithLinks,
+  getToken, saveToken, BioGroup, BioLink, BioGroupWithLinks,
 } from "@/lib/firebase";
+import { getIgProfile } from "@/lib/instagram";
 import {
   Plus, Trash2, Edit2, X,
   Copy, Check, GripVertical, ExternalLink,
@@ -22,10 +23,11 @@ export default function BioPage() {
   const { user } = useAuth();
   const { show, ToastEl } = useToast();
 
-  const [groups,   setGroups]   = useState<BioGroupWithLinks[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [handle,   setHandle]   = useState("");
-  const [copied,   setCopied]   = useState(false);
+  const [groups,    setGroups]    = useState<BioGroupWithLinks[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [handle,    setHandle]    = useState("");
+  const [profilePic, setProfilePic] = useState("");
+  const [copied,    setCopied]    = useState(false);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   // Group form state
@@ -45,14 +47,33 @@ export default function BioPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
-  /* ── Load ── */
+  /* ── Load + refresh profile picture ── */
   const load = async () => {
     if (!user) return;
     const [g, t] = await Promise.all([getGroupsWithLinks(user.uid), getToken(user.uid)]);
     setGroups(g);
-    if (t?.ig_username) setHandle(t.ig_username);
+
+    if (t) {
+      setHandle(t.ig_username ?? "");
+
+      // Always re-fetch a fresh profile picture on load (IG URLs expire)
+      try {
+        const profile = await getIgProfile(t.access_token, t.ig_user_id);
+        const freshPic = profile.profile_picture_url ?? "";
+        setProfilePic(freshPic);
+        // Persist fresh URL back to Firebase so other pages can use it
+        if (freshPic && freshPic !== t.profile_picture_url) {
+          await saveToken(user.uid, { ...t, profile_picture_url: freshPic });
+        }
+      } catch {
+        // If fetch fails (expired token etc.), fall back to whatever is stored
+        setProfilePic(t.profile_picture_url ?? "");
+      }
+    }
+
     setLoading(false);
   };
+
   useEffect(() => { load(); }, [user]); // eslint-disable-line
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -175,7 +196,6 @@ export default function BioPage() {
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
     const updated = reordered.map((l, i) => ({ ...l, order: i }));
-    // Optimistic update
     setGroups(prev => prev.map(g => g.id === groupId ? { ...g, links: updated } : g));
     await Promise.all(updated.map(l =>
       updateGroupLink(user.uid, groupId, l.id!, { order: l.order })
@@ -185,7 +205,6 @@ export default function BioPage() {
 
   /* ══ Preview helpers ══ */
   const previewGroups = groups.filter(g => g.active && g.links.some(l => l.active));
-  const totalLinks    = groups.reduce((s, g) => s + g.links.length, 0);
   const totalActive   = groups.reduce((s, g) => s + g.links.filter(l => l.active).length, 0);
   const totalClicks   = groups.reduce((s, g) => s + g.links.reduce((ls, l) => ls + (l.clicks || 0), 0), 0);
 
@@ -368,23 +387,19 @@ export default function BioPage() {
                   </div>
 
                   <div style={{ display:"flex", alignItems:"center", gap:7, flexShrink:0 }}>
-                    {/* Visibility toggle */}
                     <label className="toggle">
                       <input type="checkbox" checked={group.active}
                         onChange={() => handleToggleGroup(group)}/>
                       <span className="toggle-slider"/>
                     </label>
-                    {/* Rename */}
                     <button className="btn-ghost" onClick={() => openEditGroup(group)}
                       style={{ padding:"5px 9px" }}>
                       <Edit2 size={12}/>
                     </button>
-                    {/* Delete group */}
                     <button className="btn-ghost" onClick={() => handleDeleteGroup(group.id!)}
                       style={{ padding:"5px 9px", color:"var(--accent)", borderColor:"rgba(255,77,106,0.3)" }}>
                       <Trash2 size={12}/>
                     </button>
-                    {/* Add link to this group */}
                     <button className="btn-ghost" onClick={() => openNewLink(group.id!)}
                       style={{ padding:"5px 12px", fontSize:12, color:"var(--green)", borderColor:"rgba(0,214,143,0.3)" }}>
                       <Plus size={12}/>Link
@@ -417,14 +432,12 @@ export default function BioPage() {
                           }}>
                           <GripVertical size={13} color="var(--text3)" style={{ flexShrink:0 }}/>
 
-                          {/* Emoji icon */}
                           <div style={{ width:32, height:32, borderRadius:8, background:"var(--bg2)",
                             display:"flex", alignItems:"center", justifyContent:"center",
                             fontSize:16, flexShrink:0 }}>
                             {link.icon}
                           </div>
 
-                          {/* Text */}
                           <div style={{ flex:1, minWidth:0 }}>
                             <div style={{ fontSize:13, fontWeight:600, color:"var(--text)", marginBottom:1 }}>
                               {link.title}
@@ -437,13 +450,11 @@ export default function BioPage() {
                             )}
                           </div>
 
-                          {/* Clicks */}
                           <div style={{ textAlign:"center", flexShrink:0 }}>
                             <div style={{ fontSize:14, fontWeight:800, color:"#FF4D6A" }}>{link.clicks || 0}</div>
                             <div style={{ fontSize:9, color:"var(--text3)", letterSpacing:"0.05em", textTransform:"uppercase" }}>clicks</div>
                           </div>
 
-                          {/* Actions */}
                           <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                             <label className="toggle">
                               <input type="checkbox" checked={link.active}
@@ -488,12 +499,25 @@ export default function BioPage() {
           <div style={{ background:"#f5f5fb", minHeight:480, padding:"20px 14px 28px", overflowY:"auto", maxHeight:560 }}>
             {/* Profile */}
             <div style={{ textAlign:"center", marginBottom:18 }}>
-              <div style={{ width:48, height:48, borderRadius:"50%", margin:"0 auto 10px",
-                background:"linear-gradient(135deg,#FF4D6A,#FF7A3D)",
-                display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:18, fontWeight:800, color:"white" }}>
-                {handle?.[0]?.toUpperCase() ?? "?"}
-              </div>
+              {profilePic ? (
+                <img
+                  src={profilePic}
+                  alt={handle}
+                  style={{
+                    width:48, height:48, borderRadius:"50%",
+                    margin:"0 auto 10px", display:"block",
+                    objectFit:"cover",
+                    border:"2px solid #FF4D6A",
+                  }}
+                />
+              ) : (
+                <div style={{ width:48, height:48, borderRadius:"50%", margin:"0 auto 10px",
+                  background:"linear-gradient(135deg,#FF4D6A,#FF7A3D)",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  fontSize:18, fontWeight:800, color:"white" }}>
+                  {handle?.[0]?.toUpperCase() ?? "?"}
+                </div>
+              )}
               <div style={{ fontFamily:"sans-serif", fontWeight:700, fontSize:12, color:"#1a1a2e" }}>
                 @{handle || "your_handle"}
               </div>
@@ -507,12 +531,10 @@ export default function BioPage() {
             ) : (
               previewGroups.map(group => (
                 <div key={group.id} style={{ marginBottom:14 }}>
-                  {/* Group title */}
                   <div style={{ fontFamily:"sans-serif", fontSize:9, fontWeight:700, color:"#aaa",
                     letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:6, paddingLeft:2 }}>
                     {group.title}
                   </div>
-                  {/* Links */}
                   <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
                     {group.links.filter(l => l.active).map(link => (
                       <div key={link.id} style={{ background:"white", borderRadius:10,
