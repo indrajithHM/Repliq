@@ -298,7 +298,7 @@ function RulesInner() {
                       </p>
                       {rule.replyEnabled && rule.replyTemplate && (
                         <p style={{ fontSize:11,color:"var(--text3)",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                          💬 Reply · "{rule.replyTemplate.length > 50 ? rule.replyTemplate.slice(0,50)+"…" : rule.replyTemplate}"
+                          💬 Reply · {rule.replyTemplate.length > 50 ? rule.replyTemplate.slice(0,50)+"…" : rule.replyTemplate}
                         </p>
                       )}
                       {rule.nudgeEnabled && (
