@@ -94,7 +94,6 @@ async function handleComment(value: CommentPayload, igPageId: string) {
 
   console.log("→ handleComment:", { commentText, commenterId, postId, igPageId });
 
-  // Skip reply comments — these are replies to comments (including our own auto-replies)
   if (value.parent_id) {
     console.log("→ Skipping reply comment (has parent_id)");
     return;
@@ -113,7 +112,6 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   console.log("→ Token exists:", !!token, "ig_user_id:", token?.ig_user_id);
   if (!token) return;
 
-  // Skip if commenter is the page owner (own comments)
   if (commenterId === igPageId || commenterId === token.ig_user_id) {
     console.log("→ Skipping own comment");
     return;
@@ -158,7 +156,6 @@ async function deliverActualDm(
   commenterId: string, commenterUsername: string,
   postId: string, rule: Rule, commentId?: string
 ) {
-  // Reply to comment first (before DM)
   if (rule.replyEnabled && rule.replyTemplate && commentId) {
     try {
       await replyToComment(token.access_token, commentId, rule.replyTemplate);
@@ -170,7 +167,10 @@ async function deliverActualDm(
 
   console.log("→ deliverActualDm to:", commenterId, "rule:", rule.id);
   try {
-    await safeSendDm(token, commenterId, rule.dmTemplate);
+    // FIX: Send via comment_id if triggered by a comment to satisfy Meta's private reply rule.
+    const recipient = commentId ? { comment_id: commentId } : { id: commenterId };
+
+    await safeSendDm(token, recipient, rule.dmTemplate);
     console.log("→ DM sent successfully");
     await logDm(uid, {
       commenterId, commenterUsername, postId,
@@ -178,9 +178,11 @@ async function deliverActualDm(
       status: "sent", type: "actual",
     });
 
+    // NOTE: If the user hasn't explicitly responded to the DM yet, this nudge message will fail.
+    // Meta allows exactly ONE message per comment tracking instance until a mutual thread opens.
     if (rule.nudgeEnabled && rule.nudgeMessage) {
       await delay((rule.nudgeDelay ?? 3) * 1000);
-      await safeSendDm(token, commenterId, rule.nudgeMessage);
+      await safeSendDm(token, recipient, rule.nudgeMessage);
       console.log("→ Nudge sent successfully");
     }
   } catch (e) {
@@ -194,9 +196,10 @@ async function deliverActualDm(
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
-async function safeSendDm(token: IgToken, recipientId: string, message: string) {
-  console.log("→ safeSendDm to:", recipientId, "message:", message.slice(0, 50));
-  await sendDm(token.access_token, token.ig_user_id, recipientId, message);
+// UPDATED: Signature updated to accept the unified structured object
+async function safeSendDm(token: IgToken, recipient: { id?: string; comment_id?: string }, message: string) {
+  console.log("→ safeSendDm to:", recipient, "message:", message.slice(0, 50));
+  await sendDm(token.access_token, token.ig_user_id, recipient, message);
 }
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));

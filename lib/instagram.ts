@@ -13,15 +13,18 @@ export interface InstagramMedia {
   timestamp:      string;
 }
 
+// UPDATED: recipient now dynamically handles both { id: string } and { comment_id: string }
 export async function sendDm(
-  accessToken: string, igUserId: string,
-  recipientIgId: string, message: string
+  accessToken: string, 
+  igUserId: string,
+  recipient: { id?: string; comment_id?: string }, 
+  message: string
 ) {
   const res = await fetch(`${GRAPH}/${igUserId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      recipient: { id: recipientIgId },
+      recipient,
       message: { text: message },
       messaging_type: "RESPONSE",
       access_token: accessToken,
