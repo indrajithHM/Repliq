@@ -248,10 +248,12 @@ export const getHandleData = async (handle: string) => {
   if (!s.exists()) return null;
   const uid = s.val() as string;
 
-  const [groupsSnap, grouplinksSnap] = await Promise.all([
+  const [groupsSnap, grouplinksSnap, tokenSnap] = await Promise.all([
     get(ref(getDb(), `users/${uid}/biopage/groups`)),
     get(ref(getDb(), `users/${uid}/biopage/grouplinks`)),
+    get(ref(getDb(), `users/${uid}/tokens`)),   // 👈 add this
   ]);
+
 
   const grouplinks = grouplinksSnap.exists()
     ? (grouplinksSnap.val() as Record<string, Record<string, BioLink>>)
@@ -272,12 +274,15 @@ export const getHandleData = async (handle: string) => {
         .sort((a, b) => a.order - b.order)
     : [];
 
+ const token = tokenSnap.exists() ? (tokenSnap.val() as IgToken) : null;
+
   return {
     uid,
     groups,
-    token: null as IgToken | null,
+    profilePictureUrl: token?.profile_picture_url ?? null,  // 👈 add this
   };
 };
+
 
 /* ── Legacy flat links (backward compat) ─────────────────────────── */
 export const saveBioLink = async (uid: string, link: Omit<BioLink, "id" | "clicks">) => {
