@@ -12,11 +12,9 @@ export default async function PublicBioPage({
   const data = await getHandleData(params.handle);
   if (!data) notFound();
 
- const { uid, groups, profilePictureUrl } = data;
-const username = params.handle;
+  const { uid, groups, profilePictureUrl } = data;
+  const username = params.handle;
   const appUrl   = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  // app/u/[handle]/page.tsx
-
 
   return (
     <>
@@ -94,23 +92,23 @@ const username = params.handle;
 
           {/* Profile */}
           <div className="profile">
-            // Before
-<div className="avatar">{username?.[0]?.toUpperCase() ?? "?"}</div>
-
-
-{profilePictureUrl ? (
-  <img
-    src={profilePictureUrl}
-    alt={username}
-    style={{
-      width: 80, height: 80, borderRadius: "50%",
-      objectFit: "cover", margin: "0 auto 14px", display: "block",
-      boxShadow: "0 8px 32px rgba(255,77,106,0.35)"
-    }}
-  />
-) : (
-  <div className="avatar">{username?.[0]?.toUpperCase() ?? "?"}</div>
-)}
+            {profilePictureUrl ? (
+              <img
+                src={profilePictureUrl}
+                alt={username}
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  margin: "0 auto 14px",
+                  display: "block",
+                  boxShadow: "0 8px 32px rgba(255,77,106,0.35)",
+                }}
+              />
+            ) : (
+              <div className="avatar">{username?.[0]?.toUpperCase() ?? "?"}</div>
+            )}
             <div className="username">@{username}</div>
           </div>
 
