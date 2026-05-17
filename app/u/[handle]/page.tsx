@@ -97,7 +97,7 @@ const username = params.handle;
             // Before
 <div className="avatar">{username?.[0]?.toUpperCase() ?? "?"}</div>
 
-// After
+
 {profilePictureUrl ? (
   <img
     src={profilePictureUrl}
