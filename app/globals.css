@@ -170,3 +170,45 @@ body {
   animation: slide-in 0.28s ease; z-index: 9999; max-width: 360px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
 }
+
+/* ── Mobile responsive utilities ── */
+@media (max-width: 768px) {
+  .card    { padding: 16px; border-radius: 12px; }
+  .card-sm { padding: 12px; border-radius: 10px; }
+
+  .toast {
+    bottom: 16px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+
+  /* Stack grids to single column */
+  .mobile-stack {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Scroll horizontally for tables/logs */
+  .mobile-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide on mobile */
+  .mobile-hide {
+    display: none !important;
+  }
+
+  /* Full width buttons on mobile */
+  .mobile-full {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn-primary, .btn-ghost {
+    font-size: 13px;
+    padding: 9px 16px;
+  }
+}

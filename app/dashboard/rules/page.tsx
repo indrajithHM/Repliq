@@ -105,57 +105,61 @@ function RulesInner() {
   return (
     <div className="animate-fade-up" style={{ maxWidth:860 }}>
       {ToastEl}
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24 }}>
+      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
         <div>
-          <h1 style={{ fontSize:26,fontWeight:800,letterSpacing:"-0.03em",marginBottom:6 }}>AutoDM Rules</h1>
-          <p style={{ color:"var(--text2)",fontSize:14 }}>Configure what triggers a DM and what gets sent.</p>
+          <h1 style={{ fontSize:22,fontWeight:800,letterSpacing:"-0.03em",marginBottom:4 }}>AutoDM Rules</h1>
+          <p style={{ color:"var(--text2)",fontSize:13 }}>Configure what triggers a DM and what gets sent.</p>
         </div>
-        <button className="btn-primary" onClick={openNew}><Plus size={14}/>New rule</button>
+        <button className="btn-primary" onClick={openNew} style={{ padding:"9px 14px",fontSize:13 }}>
+          <Plus size={13}/>New rule
+        </button>
       </div>
 
       {showForm && (
-        <div className="card" style={{ marginBottom:24,border:"1px solid rgba(255,77,106,0.3)" }}>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-            <div style={{ fontWeight:700,fontSize:16 }}>{editId?"Edit rule":"New rule"}</div>
+        <div className="card" style={{ marginBottom:20,border:"1px solid rgba(255,77,106,0.3)" }}>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18 }}>
+            <div style={{ fontWeight:700,fontSize:15 }}>{editId?"Edit rule":"New rule"}</div>
             <button onClick={()=>{setShowForm(false);setEditId(null);}}
               style={{ background:"none",border:"none",color:"var(--text3)",cursor:"pointer" }}><X size={18}/></button>
           </div>
 
-          <div style={{ marginBottom:18 }}>
+          {/* Post selector */}
+          <div style={{ marginBottom:16 }}>
             <label className="label">Post</label>
             {form.postId ? (
-              <div style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 14px",
-                background:"var(--bg3)",borderRadius:10,border:"1px solid var(--border)" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
+                background:"var(--bg3)",borderRadius:10,border:"1px solid var(--border)",flexWrap:"wrap" }}>
                 {form.postThumbnail && (
-                  <img src={form.postThumbnail} alt="" style={{ width:40,height:40,borderRadius:6,objectFit:"cover" }}/>
+                  <img src={form.postThumbnail} alt="" style={{ width:38,height:38,borderRadius:6,objectFit:"cover",flexShrink:0 }}/>
                 )}
-                <div style={{ fontSize:13,color:"var(--text)",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                <div style={{ fontSize:12,color:"var(--text)",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0 }}>
                   {form.postUrl}
                 </div>
                 <a href="/dashboard/posts">
-                  <button className="btn-ghost" style={{ padding:"6px 12px",fontSize:12 }}>Change</button>
+                  <button className="btn-ghost" style={{ padding:"5px 10px",fontSize:12,flexShrink:0 }}>Change</button>
                 </a>
               </div>
             ) : (
               <a href="/dashboard/posts" style={{ textDecoration:"none" }}>
                 <button className="btn-ghost" style={{ width:"100%",justifyContent:"center" }}>
-                  <Plus size={14}/>Select a post
+                  <Plus size={13}/>Select a post
                 </button>
               </a>
             )}
           </div>
 
-          <div style={{ marginBottom:18 }}>
+          {/* Match mode */}
+          <div style={{ marginBottom:16 }}>
             <label className="label">Match mode</label>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10 }}>
+            <div className="match-mode-grid">
               {(Object.keys(MODE_INFO) as MatchMode[]).map(mode => {
                 const info = MODE_INFO[mode]; const sel = form.matchMode === mode;
                 return (
                   <div key={mode} onClick={()=>setForm(f=>({...f,matchMode:mode}))}
-                    style={{ padding:"12px 14px",borderRadius:10,cursor:"pointer",
+                    style={{ padding:"11px 12px",borderRadius:10,cursor:"pointer",
                       border:`1px solid ${sel?info.color:"var(--border)"}`,
                       background:sel?`${info.color}10`:"var(--bg3)",transition:"all 0.15s" }}>
-                    <div style={{ fontWeight:700,fontSize:13,color:sel?info.color:"var(--text)",marginBottom:3 }}>{info.label}</div>
+                    <div style={{ fontWeight:700,fontSize:12,color:sel?info.color:"var(--text)",marginBottom:2 }}>{info.label}</div>
                     <div style={{ fontSize:11,color:"var(--text3)",lineHeight:1.4 }}>{info.desc}</div>
                   </div>
                 );
@@ -163,8 +167,9 @@ function RulesInner() {
             </div>
           </div>
 
+          {/* Keywords */}
           {form.matchMode !== "any_comment" && (
-            <div style={{ marginBottom:18 }}>
+            <div style={{ marginBottom:16 }}>
               <label className="label">Keywords</label>
               <div style={{ display:"flex",gap:8,marginBottom:8 }}>
                 <input className="input" value={kwInput}
@@ -173,13 +178,13 @@ function RulesInner() {
                   placeholder='e.g. "link", "price", "how"'/>
                 <button className="btn-ghost" onClick={addKw} style={{ flexShrink:0 }}>Add</button>
               </div>
-              <div style={{ display:"flex",flexWrap:"wrap",gap:8 }}>
+              <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
                 {(form.keywords ?? []).map(kw=>(
-                  <span key={kw} style={{ display:"inline-flex",alignItems:"center",gap:6,
-                    padding:"4px 12px",borderRadius:20,background:"var(--bg3)",
-                    border:"1px solid var(--border)",fontSize:13,color:"var(--text)" }}>
+                  <span key={kw} style={{ display:"inline-flex",alignItems:"center",gap:5,
+                    padding:"4px 10px",borderRadius:20,background:"var(--bg3)",
+                    border:"1px solid var(--border)",fontSize:12,color:"var(--text)" }}>
                     {kw}
-                    <X size={12} style={{ cursor:"pointer",color:"var(--text3)" }}
+                    <X size={11} style={{ cursor:"pointer",color:"var(--text3)" }}
                       onClick={()=>setForm(f=>({...f,keywords:(f.keywords??[]).filter(k=>k!==kw)}))}/>
                   </span>
                 ))}
@@ -187,20 +192,21 @@ function RulesInner() {
             </div>
           )}
 
-          <div style={{ marginBottom:18 }}>
+          {/* DM message */}
+          <div style={{ marginBottom:16 }}>
             <label className="label">DM message (sent to user)</label>
             <textarea className="textarea" rows={4} value={form.dmTemplate}
               onChange={e=>setForm(f=>({...f,dmTemplate:e.target.value}))}
               placeholder="Hey! Thanks for commenting. Here's what you asked for: https://…"/>
           </div>
 
-          {/* ── Public comment reply ── */}
-          <div style={{ marginBottom:18 }}>
+          {/* Public comment reply */}
+          <div style={{ marginBottom:16 }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
               <div>
                 <label className="label" style={{ margin:0 }}>Public comment reply</label>
                 <p style={{ fontSize:11,color:"var(--text3)",marginTop:2 }}>
-                  Visible reply posted under the comment on your post
+                  Visible reply posted under the comment
                 </p>
               </div>
               <label className="toggle">
@@ -210,18 +216,15 @@ function RulesInner() {
               </label>
             </div>
             {form.replyEnabled && (
-              <input
-                className="input"
-                value={form.replyTemplate}
+              <input className="input" value={form.replyTemplate}
                 onChange={e=>setForm(f=>({...f,replyTemplate:e.target.value}))}
                 placeholder="e.g. Thanks for commenting! Check your DMs 📩"
-                maxLength={1000}
-              />
+                maxLength={1000}/>
             )}
           </div>
 
-          {/* ── Engagement nudge ── */}
-          <div style={{ marginBottom:18 }}>
+          {/* Engagement nudge */}
+          <div style={{ marginBottom:16 }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
               <label className="label" style={{ margin:0 }}>Engagement nudge (2nd DM)</label>
               <label className="toggle">
@@ -234,9 +237,9 @@ function RulesInner() {
               <>
                 <textarea className="textarea" rows={2} value={form.nudgeMessage}
                   onChange={e=>setForm(f=>({...f,nudgeMessage:e.target.value}))}/>
-                <div style={{ display:"flex",gap:10,alignItems:"center",marginTop:8 }}>
+                <div style={{ display:"flex",gap:10,alignItems:"center",marginTop:8,flexWrap:"wrap" }}>
                   <span style={{ fontSize:12,color:"var(--text3)" }}>Delay</span>
-                  <input type="number" className="input" style={{ width:72 }}
+                  <input type="number" className="input" style={{ width:68 }}
                     value={form.nudgeDelay} min={1} max={60}
                     onChange={e=>setForm(f=>({...f,nudgeDelay:Number(e.target.value)}))}/>
                   <span style={{ fontSize:12,color:"var(--text3)" }}>seconds after first DM</span>
@@ -245,16 +248,18 @@ function RulesInner() {
             )}
           </div>
 
-          <div style={{ display:"flex",gap:12,alignItems:"center",marginBottom:22 }}>
+          {/* Follow-gate expiry */}
+          <div style={{ display:"flex",gap:10,alignItems:"center",marginBottom:20,flexWrap:"wrap" }}>
             <label className="label" style={{ margin:0,whiteSpace:"nowrap" }}>Follow-gate expiry</label>
-            <input type="number" className="input" style={{ width:72 }}
+            <input type="number" className="input" style={{ width:68 }}
               value={form.pendingExpiry} min={1} max={168}
               onChange={e=>setForm(f=>({...f,pendingExpiry:Number(e.target.value)}))}/>
             <span style={{ fontSize:12,color:"var(--text3)" }}>hours (non-followers must follow within this time)</span>
           </div>
 
-          <div style={{ display:"flex",gap:10 }}>
-            <button className="btn-primary" onClick={handleSave} disabled={saving}>
+          <div style={{ display:"flex",gap:10,flexWrap:"wrap" }}>
+            <button className="btn-primary" onClick={handleSave} disabled={saving}
+              style={{ flex:1,justifyContent:"center" }}>
               {saving?"Saving…":editId?"Update rule":"Create rule"}
             </button>
             <button className="btn-ghost" onClick={()=>{setShowForm(false);setEditId(null);}}>Cancel</button>
@@ -263,10 +268,10 @@ function RulesInner() {
       )}
 
       {loading
-        ? [1,2,3].map(i=><div key={i} className="skeleton" style={{ height:88,borderRadius:12,marginBottom:10 }}/>)
+        ? [1,2,3].map(i=><div key={i} className="skeleton" style={{ height:80,borderRadius:12,marginBottom:10 }}/>)
         : rules.length===0&&!showForm
-        ? <div style={{ textAlign:"center",padding:"80px 0",color:"var(--text3)" }}>
-            <div style={{ fontSize:40,marginBottom:12 }}>⚡</div>
+        ? <div style={{ textAlign:"center",padding:"64px 0",color:"var(--text3)" }}>
+            <div style={{ fontSize:36,marginBottom:12 }}>⚡</div>
             <div style={{ fontWeight:700,fontSize:15,color:"var(--text2)",marginBottom:6 }}>No rules yet</div>
             <p style={{ fontSize:13 }}>Create your first rule to start automating DMs.</p>
           </div>
@@ -275,48 +280,48 @@ function RulesInner() {
               const info = MODE_INFO[rule.matchMode];
               const keywords = rule.keywords ?? [];
               return (
-                <div key={rule.id} className="card" style={{ padding:"16px 18px",opacity:rule.active?1:0.55 }}>
-                  <div style={{ display:"flex",alignItems:"flex-start",gap:14 }}>
+                <div key={rule.id} className="card" style={{ padding:"14px 16px",opacity:rule.active?1:0.55 }}>
+                  <div style={{ display:"flex",alignItems:"flex-start",gap:12,flexWrap:"wrap" }}>
                     {rule.postThumbnail && (
-                      <img src={rule.postThumbnail} alt="" style={{ width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0 }}/>
+                      <img src={rule.postThumbnail} alt="" style={{ width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0 }}/>
                     )}
                     <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap" }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap" }}>
                         <span className="badge" style={{ background:`${info.color}18`,color:info.color,border:`1px solid ${info.color}33` }}>
                           {info.label}
                         </span>
-                        {keywords.slice(0,4).map(kw=>(
-                          <span key={kw} style={{ fontSize:12,padding:"2px 10px",borderRadius:20,
+                        {keywords.slice(0,3).map(kw=>(
+                          <span key={kw} style={{ fontSize:11,padding:"2px 8px",borderRadius:20,
                             background:"var(--bg3)",color:"var(--text2)",border:"1px solid var(--border)" }}>{kw}</span>
                         ))}
-                        {keywords.length>4 && (
-                          <span style={{ fontSize:12,color:"var(--text3)" }}>+{keywords.length-4} more</span>
+                        {keywords.length>3 && (
+                          <span style={{ fontSize:11,color:"var(--text3)" }}>+{keywords.length-3} more</span>
                         )}
                       </div>
-                      <p style={{ fontSize:13,color:"var(--text2)",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                      <p style={{ fontSize:12,color:"var(--text2)",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
                         ✉️ {rule.dmTemplate}
                       </p>
                       {rule.replyEnabled && rule.replyTemplate && (
                         <p style={{ fontSize:11,color:"var(--text3)",marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                          💬 Reply · {rule.replyTemplate.length > 50 ? rule.replyTemplate.slice(0,50)+"…" : rule.replyTemplate}
+                          💬 {rule.replyTemplate.length > 45 ? rule.replyTemplate.slice(0,45)+"…" : rule.replyTemplate}
                         </p>
                       )}
                       {rule.nudgeEnabled && (
                         <p style={{ fontSize:11,color:"var(--text3)" }}>💫 Nudge · {rule.nudgeDelay}s delay</p>
                       )}
                     </div>
-                    <div style={{ display:"flex",alignItems:"center",gap:8,flexShrink:0 }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:6,flexShrink:0 }}>
                       <label className="toggle">
                         <input type="checkbox" checked={rule.active}
                           onChange={()=>updateRule(user!.uid,rule.id!,{active:!rule.active}).then(load)}/>
                         <span className="toggle-slider"/>
                       </label>
-                      <button className="btn-ghost" onClick={()=>handleEdit(rule)} style={{ padding:"7px 11px" }}>
-                        <Edit2 size={13}/>
+                      <button className="btn-ghost" onClick={()=>handleEdit(rule)} style={{ padding:"6px 10px" }}>
+                        <Edit2 size={12}/>
                       </button>
                       <button className="btn-ghost" onClick={()=>handleDelete(rule.id!)}
-                        style={{ padding:"7px 11px",color:"var(--accent)",borderColor:"rgba(255,77,106,0.3)" }}>
-                        <Trash2 size={13}/>
+                        style={{ padding:"6px 10px",color:"var(--accent)",borderColor:"rgba(255,77,106,0.3)" }}>
+                        <Trash2 size={12}/>
                       </button>
                     </div>
                   </div>
@@ -325,13 +330,28 @@ function RulesInner() {
             })}
           </div>
       }
+
+      <style>{`
+        .match-mode-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 10px;
+        }
+
+        @media (max-width: 540px) {
+          .match-mode-grid {
+            grid-template-columns: 1fr;
+            gap: 8px;
+          }
+        }
+      `}</style>
     </div>
   );
 }
 
 export default function RulesPage() {
   return (
-    <Suspense fallback={<div style={{ color:"var(--text2)" }}>Loading…</div>}>
+    <Suspense fallback={<div style={{ color:"var(--text2)",padding:16 }}>Loading…</div>}>
       <RulesInner/>
     </Suspense>
   );

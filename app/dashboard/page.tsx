@@ -36,21 +36,21 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-fade-up">
-      <div style={{ marginBottom:28 }}>
-        <h1 style={{ fontSize:28,fontWeight:800,letterSpacing:"-0.03em",marginBottom:6 }}>
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:24,fontWeight:800,letterSpacing:"-0.03em",marginBottom:6 }}>
           Good {greet} 👋
         </h1>
-        <p style={{ color:"var(--text2)",fontSize:14 }}>
+        <p style={{ color:"var(--text2)",fontSize:13 }}>
           {token ? `Connected as @${token.ig_username}` : "Connect your Instagram account to get started"}
         </p>
       </div>
 
       {!loading && !token && (
         <div style={{ background:"rgba(255,77,106,0.07)",border:"1px solid rgba(255,77,106,0.2)",
-          borderRadius:14,padding:"18px 22px",marginBottom:24,
-          display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          borderRadius:14,padding:"16px 18px",marginBottom:20,
+          display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap" }}>
           <div>
-            <div style={{ fontWeight:700,marginBottom:3,fontSize:15 }}>Instagram not connected</div>
+            <div style={{ fontWeight:700,marginBottom:3,fontSize:14 }}>Instagram not connected</div>
             <div style={{ color:"var(--text2)",fontSize:13 }}>Connect your account to start automating DMs</div>
           </div>
           <Link href="/dashboard/connect" style={{ textDecoration:"none" }}>
@@ -59,21 +59,23 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:28 }}>
+      {/* Stats grid — 2×2 on mobile, 4×1 on desktop */}
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20 }} className="stats-grid">
         {stats.map(s => (
-          <div key={s.label} className="card" style={{ padding:"18px 20px" }}>
-            <div style={{ fontSize:20,marginBottom:8 }}>{s.icon}</div>
-            <div style={{ fontSize:30,fontWeight:800,color:s.color,letterSpacing:"-0.03em",marginBottom:3 }}>
-              {loading ? <div className="skeleton" style={{ width:40,height:28,borderRadius:6 }}/> : s.value}
+          <div key={s.label} className="card-sm" style={{ padding:"14px 16px" }}>
+            <div style={{ fontSize:18,marginBottom:6 }}>{s.icon}</div>
+            <div style={{ fontSize:26,fontWeight:800,color:s.color,letterSpacing:"-0.03em",marginBottom:2 }}>
+              {loading ? <div className="skeleton" style={{ width:36,height:24,borderRadius:6 }}/> : s.value}
             </div>
-            <div style={{ fontSize:11,color:"var(--text3)",fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase" }}>
+            <div style={{ fontSize:10,color:"var(--text3)",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase" }}>
               {s.label}
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1.6fr",gap:18 }}>
+      {/* Quick actions + Recent DMs — stack on mobile */}
+      <div style={{ display:"grid",gap:14 }} className="bottom-grid">
         <div className="card">
           <div style={{ fontWeight:700,fontSize:15,marginBottom:14 }}>Quick actions</div>
           {[
@@ -124,6 +126,17 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      <style>{`
+        @media (min-width: 769px) {
+          .stats-grid {
+            grid-template-columns: repeat(4, 1fr) !important;
+          }
+          .bottom-grid {
+            grid-template-columns: 1fr 1.6fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
