@@ -106,6 +106,8 @@ export interface DmLog {
   commenterId:       string;
   commenterUsername: string;
   postId:            string;
+  postUrl?:          string;      // 👈
+  postShortcode?:    string;      // 👈
   ruleId:            string;
   sentAt:            number;
   status:            "sent" | "failed";

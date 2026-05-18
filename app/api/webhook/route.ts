@@ -156,6 +156,7 @@ async function deliverActualDm(
   commenterId: string, commenterUsername: string,
   postId: string, rule: Rule, commentId?: string
 ) {
+  const shortcode = rule.postUrl?.split("/p/")[1]?.replace(/\//g, "") ?? "";
   if (rule.replyEnabled && rule.replyTemplate && commentId) {
     try {
       await replyToComment(token.access_token, commentId, rule.replyTemplate);
@@ -172,11 +173,16 @@ async function deliverActualDm(
 
     await safeSendDm(token, recipient, rule.dmTemplate);
     console.log("→ DM sent successfully");
-    await logDm(uid, {
-      commenterId, commenterUsername, postId,
-      ruleId: rule.id!, sentAt: Date.now(),
-      status: "sent", type: "actual",
-    });
+
+   
+
+await logDm(uid, {
+  commenterId, commenterUsername, postId,
+  postUrl: rule.postUrl ?? "",        // 👈
+  postShortcode: shortcode,           // 👈
+  ruleId: rule.id!, sentAt: Date.now(),
+  status: "sent", type: "actual",
+});
 
     // NOTE: If the user hasn't explicitly responded to the DM yet, this nudge message will fail.
     // Meta allows exactly ONE message per comment tracking instance until a mutual thread opens.
@@ -187,11 +193,13 @@ async function deliverActualDm(
     }
   } catch (e) {
     console.error("→ DM failed:", e);
-    await logDm(uid, {
-      commenterId, commenterUsername, postId,
-      ruleId: rule.id!, sentAt: Date.now(),
-      status: "failed", type: "actual",
-    });
+   await logDm(uid, {
+  commenterId, commenterUsername, postId,
+  postUrl: rule.postUrl ?? "",        // 👈
+  postShortcode: shortcode,           // 👈
+  ruleId: rule.id!, sentAt: Date.now(),
+  status: "failed", type: "actual",
+});
   }
 }
 
