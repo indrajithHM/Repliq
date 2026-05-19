@@ -85,6 +85,9 @@ export interface Rule {
   createdAt:     number;
   replyEnabled: boolean;
   replyTemplate: string; 
+  ctaLabel?: string;
+ctaUrl?: string;
+ctaEnabled?: boolean;
 }
 export const saveRule = async (uid: string, rule: Omit<Rule, "id">) => {
   const r = push(ref(getDb(), `users/${uid}/rules`));
@@ -133,9 +136,11 @@ export const alreadyDmed = async (uid: string, commenterId: string, postId: stri
 export interface PendingEntry {
   id?:         string;
   commenterId: string;
+  commenterUsername: string;
   postId:      string;
   ruleId:      string;
   uid:         string;
+  savedAt:    number;
   expiresAt:   number;
 }
 export const savePending = (uid: string, e: Omit<PendingEntry, "id">) =>

@@ -13,23 +13,49 @@ export interface InstagramMedia {
   timestamp:      string;
 }
 
-// UPDATED: recipient now dynamically handles both { id: string } and { comment_id: string }
+export interface CtaButton {
+  label: string;
+  url:   string;
+}
+
 export async function sendDm(
-  accessToken: string, 
-  igUserId: string,
-  recipient: { id?: string; comment_id?: string }, 
-  message: string
+  accessToken: string,
+  igUserId:    string,
+  recipient:   { id?: string; comment_id?: string },
+  message:     string,
+  cta?:        CtaButton,          // optional — only sent if provided
 ) {
+  // If a CTA button is provided, use the button template format
+  const messagePayload = cta?.label && cta?.url
+    ? {
+        attachment: {
+          type: "template",
+          payload: {
+            template_type: "button",
+            text: message,
+            buttons: [
+              {
+                type:  "web_url",
+                url:   cta.url,
+                title: cta.label,
+              },
+            ],
+          },
+        },
+      }
+    : { text: message };
+
   const res = await fetch(`${GRAPH}/${igUserId}/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       recipient,
-      message: { text: message },
+      message: messagePayload,
       messaging_type: "RESPONSE",
       access_token: accessToken,
     }),
   });
+
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message ?? "Failed to send DM");
   return data;
@@ -37,8 +63,8 @@ export async function sendDm(
 
 export async function replyToComment(
   accessToken: string,
-  commentId: string,
-  message: string
+  commentId:   string,
+  message:     string,
 ) {
   const res = await fetch(`${GRAPH}/${commentId}/replies`, {
     method: "POST",
@@ -84,7 +110,6 @@ export async function getIgProfile(accessToken: string, igUserId: string) {
 }
 
 export async function exchangeCodeForToken(code: string, redirectUri: string) {
-  // Step 1: short-lived token
   const params = new URLSearchParams({
     client_id:     IG_APP_ID,
     client_secret: IG_APP_SECRET,
@@ -98,14 +123,12 @@ export async function exchangeCodeForToken(code: string, redirectUri: string) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error_message ?? "Token exchange failed");
 
-  // Step 2: long-lived token
   const llRes = await fetch(
     `${GRAPH}/access_token?grant_type=ig_exchange_token&client_secret=${IG_APP_SECRET}&access_token=${data.access_token}`
   );
   const llData = await llRes.json();
   if (!llRes.ok) throw new Error(llData.error?.message ?? "Long-lived token exchange failed");
 
-  // Step 3: fetch profile + page ID + profile picture
   const meRes = await fetch(
     `${GRAPH}/me?fields=id,username,user_id,profile_picture_url&access_token=${llData.access_token}`
   );
@@ -136,8 +159,8 @@ export async function refreshToken(accessToken: string) {
 
 export function matchComment(
   commentText: string,
-  matchMode: "any_comment" | "word_match" | "exact_match",
-  keywords: string[]
+  matchMode:   "any_comment" | "word_match" | "exact_match",
+  keywords:    string[],
 ): boolean {
   if (matchMode === "any_comment") return true;
   const lower = commentText.trim().toLowerCase();

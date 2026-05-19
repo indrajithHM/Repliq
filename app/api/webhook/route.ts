@@ -6,7 +6,7 @@ import {
   savePending, getPendingByCommenter, deletePending,
   findUidByIgUserId, Rule, IgToken,
 } from "@/lib/firebase";
-import { sendDm, matchComment, replyToComment } from "@/lib/instagram";
+import { sendDm, matchComment, replyToComment, checkFollower, CtaButton } from "@/lib/instagram";
 
 /* ── GET: webhook verification ─────────────────────────────────── */
 export async function GET(req: NextRequest) {
@@ -131,6 +131,69 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   console.log("→ Already DMed:", alreadySent);
   if (alreadySent) return;
 
+  // Follow-gate: check if commenter follows the account
+  let isFollower = false;
+  try {
+    isFollower = await checkFollower(token.access_token, token.ig_user_id, commenterId);
+  } catch (e) {
+    console.error("→ checkFollower error (treating as non-follower):", e);
+  }
+  console.log("→ Is follower:", isFollower);
+
+  if (!isFollower) {
+    // Save as pending so we can deliver when they follow
+   await savePending(uid, {
+  uid,
+  commenterId,
+  commenterUsername,
+  postId,
+  ruleId: matched.id!,
+  savedAt: Date.now(),
+  expiresAt:
+    Date.now() + (matched.pendingExpiry ?? 48) * 60 * 60 * 1000,
+});
+
+    // Send follow-prompt DM with bio link as button
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const bioUrl = token.ig_username && appUrl
+      ? `${appUrl}/u/${token.ig_username}`
+      : undefined;
+
+    const followPromptText = matched.nudgeMessage?.trim()
+      ? matched.nudgeMessage
+      : `Hey! To receive what you asked for, please follow @${token.ig_username} first and then I'll send it right over! 🙏`;
+
+    const recipient = commentId ? { comment_id: commentId } : { id: commenterId };
+
+    try {
+      await safeSendDm(
+        token,
+        recipient,
+        followPromptText,
+        bioUrl ? { label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` } : undefined,
+      );
+      console.log("→ Follow-prompt DM sent");
+      await logDm(uid, {
+        commenterId, commenterUsername, postId,
+        postUrl: matched.postUrl ?? "",
+        postShortcode: matched.postUrl?.split("/p/")[1]?.replace(/\//g, "") ?? "",
+        ruleId: matched.id!, sentAt: Date.now(),
+        status: "sent", type: "follow_prompt",
+      });
+    } catch (e) {
+      console.error("→ Follow-prompt DM failed:", e);
+      await logDm(uid, {
+        commenterId, commenterUsername, postId,
+        postUrl: matched.postUrl ?? "",
+        postShortcode: matched.postUrl?.split("/p/")[1]?.replace(/\//g, "") ?? "",
+        ruleId: matched.id!, sentAt: Date.now(),
+        status: "failed", type: "follow_prompt",
+      });
+    }
+    return;
+  }
+
+  // Follower — deliver the actual DM immediately
   await deliverActualDm(uid, token, commenterId, commenterUsername, postId, matched, commentId);
 }
 
@@ -146,6 +209,8 @@ async function handleFollow(followerId: string, igPageId: string) {
   const rules = await getRules(uid);
   const rule  = rules.find(r => r.id === pending.ruleId);
   if (!rule) return;
+
+  // They followed — deliver the actual rule DM (with rule's own CTA if configured)
   await deliverActualDm(uid, token, followerId, "user", pending.postId, rule);
   await deletePending(uid, pending.id!);
 }
@@ -154,9 +219,12 @@ async function handleFollow(followerId: string, igPageId: string) {
 async function deliverActualDm(
   uid: string, token: IgToken,
   commenterId: string, commenterUsername: string,
-  postId: string, rule: Rule, commentId?: string
+  postId: string, rule: Rule,
+  commentId?: string,
 ) {
   const shortcode = rule.postUrl?.split("/p/")[1]?.replace(/\//g, "") ?? "";
+
+  // Public comment reply
   if (rule.replyEnabled && rule.replyTemplate && commentId) {
     try {
       await replyToComment(token.access_token, commentId, rule.replyTemplate);
@@ -166,26 +234,29 @@ async function deliverActualDm(
     }
   }
 
-  console.log("→ deliverActualDm to:", commenterId, "rule:", rule.id);
-  try {
-    // FIX: Send via comment_id if triggered by a comment to satisfy Meta's private reply rule.
-    const recipient = commentId ? { comment_id: commentId } : { id: commenterId };
+  // Use rule's CTA button if configured
+  const cta: CtaButton | undefined =
+    rule.ctaEnabled && rule.ctaLabel && rule.ctaUrl
+      ? { label: rule.ctaLabel, url: rule.ctaUrl }
+      : undefined;
 
-    await safeSendDm(token, recipient, rule.dmTemplate);
+  console.log("→ deliverActualDm to:", commenterId, "rule:", rule.id, "cta:", cta ?? "none");
+
+  const recipient = commentId ? { comment_id: commentId } : { id: commenterId };
+
+  try {
+    await safeSendDm(token, recipient, rule.dmTemplate, cta);
     console.log("→ DM sent successfully");
 
-   
+    await logDm(uid, {
+      commenterId, commenterUsername, postId,
+      postUrl: rule.postUrl ?? "",
+      postShortcode: shortcode,
+      ruleId: rule.id!, sentAt: Date.now(),
+      status: "sent", type: "actual",
+    });
 
-await logDm(uid, {
-  commenterId, commenterUsername, postId,
-  postUrl: rule.postUrl ?? "",        // 👈
-  postShortcode: shortcode,           // 👈
-  ruleId: rule.id!, sentAt: Date.now(),
-  status: "sent", type: "actual",
-});
-
-    // NOTE: If the user hasn't explicitly responded to the DM yet, this nudge message will fail.
-    // Meta allows exactly ONE message per comment tracking instance until a mutual thread opens.
+    // Nudge — sent as plain text (no CTA button on the follow-up)
     if (rule.nudgeEnabled && rule.nudgeMessage) {
       await delay((rule.nudgeDelay ?? 3) * 1000);
       await safeSendDm(token, recipient, rule.nudgeMessage);
@@ -193,21 +264,25 @@ await logDm(uid, {
     }
   } catch (e) {
     console.error("→ DM failed:", e);
-   await logDm(uid, {
-  commenterId, commenterUsername, postId,
-  postUrl: rule.postUrl ?? "",        // 👈
-  postShortcode: shortcode,           // 👈
-  ruleId: rule.id!, sentAt: Date.now(),
-  status: "failed", type: "actual",
-});
+    await logDm(uid, {
+      commenterId, commenterUsername, postId,
+      postUrl: rule.postUrl ?? "",
+      postShortcode: shortcode,
+      ruleId: rule.id!, sentAt: Date.now(),
+      status: "failed", type: "actual",
+    });
   }
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────── */
-// UPDATED: Signature updated to accept the unified structured object
-async function safeSendDm(token: IgToken, recipient: { id?: string; comment_id?: string }, message: string) {
-  console.log("→ safeSendDm to:", recipient, "message:", message.slice(0, 50));
-  await sendDm(token.access_token, token.ig_user_id, recipient, message);
+async function safeSendDm(
+  token:     IgToken,
+  recipient: { id?: string; comment_id?: string },
+  message:   string,
+  cta?:      CtaButton,
+) {
+  console.log("→ safeSendDm to:", recipient, "message:", message.slice(0, 50), "cta:", cta ?? "none");
+  await sendDm(token.access_token, token.ig_user_id, recipient, message, cta);
 }
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));

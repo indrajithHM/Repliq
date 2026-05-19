@@ -14,6 +14,7 @@ const DEFAULT: FormState = {
   dmTemplate:"", nudgeMessage:"💫 Loved this? Share the post with your friends and don't forget to hit like — it really helps! ❤️",
   nudgeEnabled:true, nudgeDelay:3, pendingExpiry:48, active:true,
   replyEnabled:false, replyTemplate:"Thanks for commenting! Check your DMs 📩",
+  ctaEnabled:false, ctaLabel:"", ctaUrl:"",
 };
 
 const MODE_INFO: Record<MatchMode,{label:string;desc:string;color:string}> = {
@@ -86,6 +87,9 @@ function RulesInner() {
       pendingExpiry: r.pendingExpiry, active: r.active,
       replyEnabled: r.replyEnabled ?? false,
       replyTemplate: r.replyTemplate ?? "Thanks for commenting! Check your DMs 📩",
+      ctaEnabled: r.ctaEnabled ?? false,
+      ctaLabel: r.ctaLabel ?? "",
+      ctaUrl: r.ctaUrl ?? "",
     });
     setEditId(r.id!); setShowForm(true);
   };
@@ -200,6 +204,55 @@ function RulesInner() {
               placeholder="Hey! Thanks for commenting. Here's what you asked for: https://…"/>
           </div>
 
+          {/* CTA Button */}
+          <div style={{ marginBottom:16 }}>
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
+              <div>
+                <label className="label" style={{ margin:0 }}>CTA Button</label>
+                <p style={{ fontSize:11,color:"var(--text3)",marginTop:2 }}>
+                  Shows as a tappable button in the DM (e.g. &quot;Best Funds&quot;)
+                </p>
+              </div>
+              <label className="toggle">
+                <input type="checkbox" checked={form.ctaEnabled ?? false}
+                  onChange={e=>setForm(f=>({...f,ctaEnabled:e.target.checked}))}/>
+                <span className="toggle-slider"/>
+              </label>
+            </div>
+            {form.ctaEnabled && (
+              <>
+                <div style={{ display:"flex",flexDirection:"column",gap:8,marginBottom:10 }}>
+                  <input className="input" value={form.ctaLabel ?? ""}
+                    onChange={e=>setForm(f=>({...f,ctaLabel:e.target.value}))}
+                    placeholder="Button label e.g. Best Funds, Get the link"/>
+                  <input className="input" value={form.ctaUrl ?? ""}
+                    onChange={e=>setForm(f=>({...f,ctaUrl:e.target.value}))}
+                    placeholder="https://…"/>
+                </div>
+                {/* Live preview */}
+                <div style={{ padding:"12px 14px",background:"#1a1a2e",borderRadius:12,
+                  border:"1px solid var(--border)" }}>
+                  <div style={{ fontSize:10,color:"var(--text3)",marginBottom:8,letterSpacing:"0.06em",
+                    textTransform:"uppercase",fontWeight:700 }}>Instagram DM preview</div>
+                  <div style={{ background:"#2a2a3e",borderRadius:10,padding:"12px 14px",marginBottom:8 }}>
+                    <p style={{ fontSize:13,color:"white",lineHeight:1.6,whiteSpace:"pre-wrap",marginBottom:0 }}>
+                      {form.dmTemplate || <span style={{ color:"rgba(255,255,255,0.3)",fontStyle:"italic" }}>Your DM message will appear here…</span>}
+                    </p>
+                  </div>
+                  {form.ctaLabel && (
+                    <div style={{ background:"#3a3a4e",border:"1px solid rgba(255,255,255,0.1)",
+                      borderRadius:8,padding:"11px 16px",textAlign:"center",
+                      fontWeight:700,fontSize:14,color:"white",letterSpacing:"0.01em" }}>
+                      {form.ctaLabel}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
+
+
           {/* Public comment reply */}
           <div style={{ marginBottom:16 }}>
             <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
@@ -308,6 +361,13 @@ function RulesInner() {
                       )}
                       {rule.nudgeEnabled && (
                         <p style={{ fontSize:11,color:"var(--text3)" }}>💫 Nudge · {rule.nudgeDelay}s delay</p>
+                      )}
+                      {rule.ctaLabel && (
+                        <div style={{ marginTop:6,display:"inline-block",background:"var(--bg3)",
+                          border:"1px solid var(--border2)",borderRadius:6,
+                          padding:"4px 12px",fontSize:11,fontWeight:700,color:"var(--text2)" }}>
+                          🔗 {rule.ctaLabel}
+                        </div>
                       )}
                     </div>
                     <div style={{ display:"flex",alignItems:"center",gap:6,flexShrink:0 }}>
