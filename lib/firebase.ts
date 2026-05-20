@@ -154,6 +154,7 @@ export interface PendingEntry {
   commenterId:       string;
   commenterUsername: string;
   postId:            string;
+  commentId?:        string;   // original comment_id — used to open DM window
   ruleId:            string;
   uid:               string;
   state:             PendingState;
