@@ -194,15 +194,24 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
 
   const pending = await getPendingByCommenter(uid, senderId);
   if (!pending) { console.log("→ No pending entry for sender"); return; }
+  console.log("→ Pending entry:", { ruleId: pending.ruleId, state: pending.state, postId: pending.postId });
 
   const rules = await getRules(uid);
+  console.log("→ Available rule IDs:", rules.map(r => r.id));
   const rule  = rules.find(r => r.id === pending.ruleId);
-  if (!rule) { console.log("→ Rule not found"); return; }
+  if (!rule) {
+    console.log("→ Rule not found. Payload ruleId:", payload.split(":")[1], "Pending ruleId:", pending.ruleId);
+    return;
+  }
 
   /* ── "Send me the link" tapped ── */
   if (payload.startsWith("SEND_LINK:")) {
-    const ruleId = payload.split(":")[1];
-    if (ruleId !== pending.ruleId) return;
+    const ruleId = payload.slice("SEND_LINK:".length);
+    console.log("→ SEND_LINK ruleId from payload:", ruleId, "pending.ruleId:", pending.ruleId);
+    if (ruleId !== pending.ruleId) {
+      console.log("→ Rule ID mismatch — skipping");
+      return;
+    }
 
     // Thread is now open (user replied) — { id } is safe from here on
     let isFollower = false;
@@ -233,8 +242,12 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
 
   /* ── "I'm following" tapped ── */
   if (payload.startsWith("FOLLOW_CONFIRM:")) {
-    const ruleId = payload.split(":")[1];
-    if (ruleId !== pending.ruleId) return;
+    const ruleId = payload.slice("FOLLOW_CONFIRM:".length);
+    console.log("→ FOLLOW_CONFIRM ruleId from payload:", ruleId, "pending.ruleId:", pending.ruleId);
+    if (ruleId !== pending.ruleId) {
+      console.log("→ Rule ID mismatch — skipping");
+      return;
+    }
 
     let isFollower = false;
     try {
