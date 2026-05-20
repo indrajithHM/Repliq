@@ -142,6 +142,16 @@ async function handleComment(value: CommentPayload, igPageId: string) {
     expiresAt: Date.now() + (matched.pendingExpiry ?? 48) * 60 * 60 * 1000,
   });
 
+  // Reply to the comment publicly (if enabled on the rule)
+  if (matched.replyEnabled && matched.replyTemplate && commentId) {
+    try {
+      await replyToComment(token.access_token, commentId, matched.replyTemplate);
+      console.log("→ Comment reply sent");
+    } catch (e) {
+      console.error("→ Comment reply failed:", e);
+    }
+  }
+
   // IMPORTANT: Use { comment_id } as recipient — this is the only way to
   // initiate a DM to someone who hasn't messaged you first.
   // Using { id: commenterId } here causes "outside of allowed window" error.
