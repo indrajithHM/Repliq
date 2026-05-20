@@ -46,57 +46,65 @@ function getDb(): Database {
 
 /* ── Tokens ─────────────────────────────────────────────────────── */
 export interface IgToken {
-  access_token: string;
-  ig_user_id:   string;
-  ig_page_id?:  string; // webhook entry.id — may differ from ig_user_id
-  ig_username:  string;
-  expires_at:   number;
+  access_token:         string;
+  ig_user_id:           string;
+  ig_page_id?:          string;
+  ig_username:          string;
+  expires_at:           number;
   profile_picture_url?: string;
 }
+
 export const saveToken = async (uid: string, data: IgToken) => {
   await set(ref(getDb(), `users/${uid}/tokens`), data);
-  // Also save page ID index for fast webhook lookup
   if (data.ig_page_id) {
     await set(ref(getDb(), `igPageIndex/${data.ig_page_id}`), uid);
   }
 };
+
 export const getToken = async (uid: string): Promise<IgToken | null> => {
   const s = await get(ref(getDb(), `users/${uid}/tokens`));
   return s.exists() ? (s.val() as IgToken) : null;
 };
+
 export const deleteToken = (uid: string) =>
   remove(ref(getDb(), `users/${uid}/tokens`));
 
 /* ── Rules ──────────────────────────────────────────────────────── */
 export type MatchMode = "any_comment" | "word_match" | "exact_match";
+
 export interface Rule {
-  id?:           string;
-  postId:        string;
-  postUrl:       string;
-  postThumbnail: string;
-  matchMode:     MatchMode;
-  keywords:      string[];
-  dmTemplate:    string;
-  nudgeMessage:  string;
-  nudgeEnabled:  boolean;
-  nudgeDelay:    number;
-  pendingExpiry: number;
-  active:        boolean;
-  createdAt:     number;
-  replyEnabled: boolean;
-  replyTemplate: string; 
-  ctaLabel?: string;
-ctaUrl?: string;
-ctaEnabled?: boolean;
+  id?:              string;
+  postId:           string;
+  postUrl:          string;
+  postThumbnail:    string;
+  matchMode:        MatchMode;
+  keywords:         string[];
+  dmTemplate:       string;
+  nudgeMessage:     string;
+  nudgeEnabled:     boolean;
+  nudgeDelay:       number;
+  pendingExpiry:    number;
+  active:           boolean;
+  createdAt:        number;
+  replyEnabled:     boolean;
+  replyTemplate:    string;
+  ctaEnabled?:      boolean;
+  ctaLabel?:        string;
+  ctaUrl?:          string;
+  followPromptMessage?: string;
 }
+
 export const saveRule = async (uid: string, rule: Omit<Rule, "id">) => {
   const r = push(ref(getDb(), `users/${uid}/rules`));
   await set(r, rule); return r.key;
 };
+
 export const updateRule = (uid: string, id: string, data: Partial<Rule>) =>
   update(ref(getDb(), `users/${uid}/rules/${id}`), data);
+
 export const deleteRule = (uid: string, id: string) =>
   remove(ref(getDb(), `users/${uid}/rules/${id}`));
+
 export const getRules = async (uid: string): Promise<Rule[]> => {
   const s = await get(ref(getDb(), `users/${uid}/rules`));
   if (!s.exists()) return [];
@@ -109,21 +117,24 @@ export interface DmLog {
   commenterId:       string;
   commenterUsername: string;
   postId:            string;
-  postUrl?:          string;      // 👈
-  postShortcode?:    string;      // 👈
+  postUrl?:          string;
+  postShortcode?:    string;
   ruleId:            string;
   sentAt:            number;
   status:            "sent" | "failed";
-  type:              "actual" | "follow_prompt";
+  type:              "actual" | "follow_prompt" | "engagement" | "follow_gate";
 }
+
 export const logDm = (uid: string, log: Omit<DmLog, "id">) =>
   push(ref(getDb(), `users/${uid}/logs`), log);
+
 export const getLogs = async (uid: string): Promise<DmLog[]> => {
   const s = await get(ref(getDb(), `users/${uid}/logs`));
   if (!s.exists()) return [];
   return Object.entries(s.val() as Record<string, DmLog>)
     .map(([id, v]) => ({ ...v, id })).sort((a, b) => b.sentAt - a.sentAt);
 };
+
 export const alreadyDmed = async (uid: string, commenterId: string, postId: string) => {
   const s = await get(ref(getDb(), `users/${uid}/logs`));
   if (!s.exists()) return false;
@@ -133,18 +144,26 @@ export const alreadyDmed = async (uid: string, commenterId: string, postId: stri
 };
 
 /* ── Pending ─────────────────────────────────────────────────────── */
+export type PendingState =
+  | "awaiting_link_request"
+  | "awaiting_follow_confirm"
+  | "completed";
+
 export interface PendingEntry {
-  id?:         string;
-  commenterId: string;
+  id?:               string;
+  commenterId:       string;
   commenterUsername: string;
-  postId:      string;
-  ruleId:      string;
-  uid:         string;
-  savedAt:    number;
-  expiresAt:   number;
+  postId:            string;
+  ruleId:            string;
+  uid:               string;
+  state:             PendingState;
+  savedAt:           number;
+  expiresAt:         number;
 }
+
 export const savePending = (uid: string, e: Omit<PendingEntry, "id">) =>
   push(ref(getDb(), `users/${uid}/pending`), e);
+
 export const getPendingByCommenter = async (uid: string, commenterId: string) => {
   const s = await get(ref(getDb(), `users/${uid}/pending`));
   if (!s.exists()) return null;
@@ -152,6 +171,10 @@ export const getPendingByCommenter = async (uid: string, commenterId: string) =>
     .find(([, v]) => v.commenterId === commenterId && v.expiresAt > Date.now());
   return match ? { ...match[1], id: match[0] } : null;
 };
+
+export const updatePendingState = (uid: string, pendingId: string, state: PendingState) =>
+  update(ref(getDb(), `users/${uid}/pending/${pendingId}`), { state });
+
 export const deletePending = (uid: string, id: string) =>
   remove(ref(getDb(), `users/${uid}/pending/${id}`));
 
@@ -184,14 +207,17 @@ export const saveGroup = async (uid: string, group: Omit<BioGroup, "id">) => {
   const r = push(ref(getDb(), `users/${uid}/biopage/groups`));
   await set(r, group); return r.key;
 };
+
 export const updateGroup = (uid: string, id: string, data: Partial<BioGroup>) =>
   update(ref(getDb(), `users/${uid}/biopage/groups/${id}`), data);
+
 export const deleteGroup = async (uid: string, id: string) => {
   await Promise.all([
     remove(ref(getDb(), `users/${uid}/biopage/groups/${id}`)),
     remove(ref(getDb(), `users/${uid}/biopage/grouplinks/${id}`)),
   ]);
 };
+
 export const getGroups = async (uid: string): Promise<BioGroup[]> => {
   const s = await get(ref(getDb(), `users/${uid}/biopage/groups`));
   if (!s.exists()) return [];
@@ -206,6 +232,7 @@ export const saveGroupLink = async (
   const r = push(ref(getDb(), `users/${uid}/biopage/grouplinks/${groupId}`));
   await set(r, { ...link, clicks: 0 }); return r.key;
 };
+
 export const updateGroupLink = (
   uid: string, groupId: string, linkId: string, data: Partial<BioLink>
 ) => update(ref(getDb(), `users/${uid}/biopage/grouplinks/${groupId}/${linkId}`), data);
@@ -258,9 +285,8 @@ export const getHandleData = async (handle: string) => {
   const [groupsSnap, grouplinksSnap, tokenSnap] = await Promise.all([
     get(ref(getDb(), `users/${uid}/biopage/groups`)),
     get(ref(getDb(), `users/${uid}/biopage/grouplinks`)),
-    get(ref(getDb(), `users/${uid}/tokens`)),   // 👈 add this
+    get(ref(getDb(), `users/${uid}/tokens`)),
   ]);
-
 
   const grouplinks = grouplinksSnap.exists()
     ? (grouplinksSnap.val() as Record<string, Record<string, BioLink>>)
@@ -281,31 +307,34 @@ export const getHandleData = async (handle: string) => {
         .sort((a, b) => a.order - b.order)
     : [];
 
- const token = tokenSnap.exists() ? (tokenSnap.val() as IgToken) : null;
+  const token = tokenSnap.exists() ? (tokenSnap.val() as IgToken) : null;
 
   return {
     uid,
     groups,
-    profilePictureUrl: token?.profile_picture_url ?? null,  // 👈 add this
+    profilePictureUrl: token?.profile_picture_url ?? null,
   };
 };
-
 
 /* ── Legacy flat links (backward compat) ─────────────────────────── */
 export const saveBioLink = async (uid: string, link: Omit<BioLink, "id" | "clicks">) => {
   const r = push(ref(getDb(), `users/${uid}/biopage/links`));
   await set(r, { ...link, clicks: 0 }); return r.key;
 };
+
 export const updateBioLink = (uid: string, id: string, data: Partial<BioLink>) =>
   update(ref(getDb(), `users/${uid}/biopage/links/${id}`), data);
+
 export const deleteBioLink = (uid: string, id: string) =>
   remove(ref(getDb(), `users/${uid}/biopage/links/${id}`));
+
 export const getBioLinks = async (uid: string): Promise<BioLink[]> => {
   const s = await get(ref(getDb(), `users/${uid}/biopage/links`));
   if (!s.exists()) return [];
   return Object.entries(s.val() as Record<string, BioLink>)
     .map(([id, v]) => ({ ...v, id })).sort((a, b) => a.order - b.order);
 };
+
 export const incrementLinkClick = async (uid: string, linkId: string) => {
   const s = await get(ref(getDb(), `users/${uid}/biopage/links/${linkId}/clicks`));
   await set(
@@ -318,14 +347,12 @@ export const incrementLinkClick = async (uid: string, linkId: string) => {
 export const findUidByIgUserId = async (igUserId: string): Promise<string | null> => {
   console.log("→ findUidByIgUserId looking for:", igUserId);
 
-  // Check page ID index first (fast lookup)
   const pageSnap = await get(ref(getDb(), `igPageIndex/${igUserId}`));
   if (pageSnap.exists()) {
     console.log("→ Found via igPageIndex:", pageSnap.val());
     return pageSnap.val() as string;
   }
 
-  // Fall back to scanning users by ig_user_id
   const s = await get(ref(getDb(), "users"));
   if (!s.exists()) return null;
   for (const [uid, data] of Object.entries(
