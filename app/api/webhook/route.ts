@@ -25,13 +25,15 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   console.log("→ Webhook received:", rawBody.slice(0, 300));
 
-  const sig      = req.headers.get("x-hub-signature-256") ?? "";
+  // Fallback array mapping to cover edge/serverless platform lowercasing headers behavior
+  const sig = req.headers.get("x-hub-signature-256") || req.headers.get("X-Hub-Signature-256") || "";
   const expected = "sha256=" +
     crypto.createHmac("sha256", process.env.META_APP_SECRET!)
-      .update(rawBody).digest("hex");
+      .update(rawBody, "utf8")
+      .digest("hex");
 
   try {
-    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    if (!sig || !crypto.timingSafeEqual(Buffer.from(sig, "utf8"), Buffer.from(expected, "utf8"))) {
       console.log("→ SIGNATURE MISMATCH");
       return new Response("Invalid signature", { status: 401 });
     }
@@ -129,7 +131,7 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   const alreadySent = await alreadyDmed(uid, commenterId, postId);
   if (alreadySent) { console.log("→ Already DMed, skipping"); return; }
 
-  // Save pending with commentId stored — needed for reply if user comes back later
+  // LOCK STEP: Instantly write state tracking item to minimize potential duplication windows
   await savePending(uid, {
     uid,
     commenterId,
@@ -152,11 +154,7 @@ async function handleComment(value: CommentPayload, igPageId: string) {
     }
   }
 
-  // IMPORTANT: Use { comment_id } as recipient — this is the only way to
-  // initiate a DM to someone who hasn't messaged you first.
-  // Using { id: commenterId } here causes "outside of allowed window" error.
-  const engagementText =
-    `Hey! Thanks for your interest 😊\nTap below and I'll send you the link ✨`;
+  const engagementText = `Hey! Thanks for your interest 😊\nTap below and I'll send you the link ✨`;
 
   try {
     await safeSendDm(
@@ -216,11 +214,9 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
 
   /* ── "Send me the link" tapped ── */
   if (payload.startsWith("SEND_LINK:")) {
-    // Use ruleId from payload — pending.ruleId may be stale if rule was recreated
     const ruleId = payload.slice("SEND_LINK:".length);
     console.log("→ SEND_LINK ruleId:", ruleId);
 
-    // Find rule from payload id, fall back to pending.ruleId
     const activeRule = rules.find(r => r.id === ruleId) ?? rule;
     if (!activeRule) { console.log("→ No rule found for payload or pending"); return; }
 
@@ -254,7 +250,6 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
   if (payload.startsWith("FOLLOW_CONFIRM:")) {
     const ruleId = payload.slice("FOLLOW_CONFIRM:".length);
     console.log("→ FOLLOW_CONFIRM ruleId:", ruleId);
-    // Use payload ruleId — more reliable than pending.ruleId
 
     const confirmRule = rules.find(r => r.id === ruleId) ?? rule;
     if (!confirmRule) { console.log("→ No rule found for FOLLOW_CONFIRM"); return; }
@@ -271,13 +266,12 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
       await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, confirmRule);
       await deletePending(uid, pending.id!);
     } else {
-      // Reprompt
       await safeSendDm(
         token,
         { id: senderId },
         `You're still not following @${token.ig_username} 🙏\nPlease follow and tap the button again!`,
         [
-          { type: "url" as const,          label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
+          { type: "url" as const,           label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
           { type: "quick_reply" as const,   label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${confirmRule.id}` },
         ],
       );
@@ -296,8 +290,6 @@ async function handleFollow(followerId: string, igPageId: string) {
   const pending = await getPendingByCommenter(uid, followerId);
   if (!pending) return;
 
-  // Only auto-deliver if they're in follow_gate state
-  // (awaiting_link_request = they haven't tapped the button yet)
   if (pending.state === "awaiting_follow_confirm") {
     const rules = await getRules(uid);
     const rule  = rules.find(r => r.id === pending.ruleId);
@@ -369,7 +361,7 @@ async function sendFollowGateDm(token: IgToken, senderId: string, rule: Rule) {
     { id: senderId },
     `Looks like you're not following @${token.ig_username} yet 👀\nFollow us and tap the button below to get your link!`,
     [
-      { type: "url" as const,          label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
+      { type: "url" as const,           label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
       { type: "quick_reply" as const,   label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${rule.id}` },
     ],
   );
@@ -387,7 +379,9 @@ async function safeSendDm(
 }
 
 function shortcodeFrom(postUrl?: string) {
-  return postUrl?.split("/p/")[1]?.replace(/\//g, "") ?? "";
+  if (!postUrl) return "";
+  const match = postUrl.match(/\/(?:p|reel)\/([^\/]+)/);
+  return match ? match[1] : "";
 }
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
