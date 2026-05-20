@@ -206,14 +206,14 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
 
   /* ── "Send me the link" tapped ── */
   if (payload.startsWith("SEND_LINK:")) {
+    // Use ruleId from payload — pending.ruleId may be stale if rule was recreated
     const ruleId = payload.slice("SEND_LINK:".length);
-    console.log("→ SEND_LINK ruleId from payload:", ruleId, "pending.ruleId:", pending.ruleId);
-    if (ruleId !== pending.ruleId) {
-      console.log("→ Rule ID mismatch — skipping");
-      return;
-    }
+    console.log("→ SEND_LINK ruleId:", ruleId);
 
-    // Thread is now open (user replied) — { id } is safe from here on
+    // Find rule from payload id, fall back to pending.ruleId
+    const activeRule = rules.find(r => r.id === ruleId) ?? rule;
+    if (!activeRule) { console.log("→ No rule found for payload or pending"); return; }
+
     let isFollower = false;
     try {
       isFollower = await checkFollower(token.access_token, token.ig_user_id, senderId);
@@ -223,18 +223,18 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
     console.log("→ Is follower:", isFollower);
 
     if (isFollower) {
-      await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, rule);
+      await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, activeRule);
       await deletePending(uid, pending.id!);
     } else {
       await updatePendingState(uid, pending.id!, "awaiting_follow_confirm");
-      await sendFollowGateDm(token, senderId, rule);
+      await sendFollowGateDm(token, senderId, activeRule);
       await logDm(uid, {
         commenterId: senderId,
         commenterUsername: pending.commenterUsername,
         postId: pending.postId,
-        postUrl: rule.postUrl ?? "",
-        postShortcode: shortcodeFrom(rule.postUrl),
-        ruleId: rule.id!, sentAt: Date.now(),
+        postUrl: activeRule.postUrl ?? "",
+        postShortcode: shortcodeFrom(activeRule.postUrl),
+        ruleId: activeRule.id!, sentAt: Date.now(),
         status: "sent", type: "follow_gate",
       });
     }
@@ -243,11 +243,11 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
   /* ── "I'm following" tapped ── */
   if (payload.startsWith("FOLLOW_CONFIRM:")) {
     const ruleId = payload.slice("FOLLOW_CONFIRM:".length);
-    console.log("→ FOLLOW_CONFIRM ruleId from payload:", ruleId, "pending.ruleId:", pending.ruleId);
-    if (ruleId !== pending.ruleId) {
-      console.log("→ Rule ID mismatch — skipping");
-      return;
-    }
+    console.log("→ FOLLOW_CONFIRM ruleId:", ruleId);
+    // Use payload ruleId — more reliable than pending.ruleId
+
+    const confirmRule = rules.find(r => r.id === ruleId) ?? rule;
+    if (!confirmRule) { console.log("→ No rule found for FOLLOW_CONFIRM"); return; }
 
     let isFollower = false;
     try {
@@ -258,7 +258,7 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
     console.log("→ Follow confirm check:", isFollower);
 
     if (isFollower) {
-      await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, rule);
+      await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, confirmRule);
       await deletePending(uid, pending.id!);
     } else {
       // Reprompt
@@ -268,7 +268,7 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
         `You're still not following @${token.ig_username} 🙏\nPlease follow and tap the button again!`,
         [
           { type: "url" as const,          label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
-          { type: "quick_reply" as const,   label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${rule.id}` },
+          { type: "quick_reply" as const,   label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${confirmRule.id}` },
         ],
       );
       console.log("→ Reprompt sent");
