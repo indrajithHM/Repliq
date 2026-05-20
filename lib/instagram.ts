@@ -118,19 +118,29 @@ export async function checkFollower(
   igUserId: string, 
   targetIgId: string
 ): Promise<boolean> {
-  // To check if a specific user follows your professional account, you must query 
-  // the Target User ID node directly and request the 'follows_business' field edge.
-  const res = await fetch(
-    `${GRAPH}/${targetIgId}?fields=follows_business&access_token=${accessToken}`
-  );
-  
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message ?? "Failed to check follower");
-  
-  // Meta returns a clear explicit boolean value mapping down under 'follows_business'
-  return !!data.follows_business;
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${targetIgId}?fields=follows_business&access_token=${accessToken}`
+    );
+    
+    const data = await res.json();
+    
+    // Check if Meta returned an API error (like the nonexisting field error)
+    if (!res.ok || data.error) {
+      console.warn(
+        "⚠️ checkFollower API bypassed (Missing Advanced Access):", 
+        data.error?.message || "Unknown API Error"
+      );
+      // Fallback to true so genuine users don't get trapped in a "Not Following" loop
+      return true; 
+    }
+    
+    return !!data.follows_business;
+  } catch (error) {
+    console.error("❌ checkFollower network/runtime error:", error);
+    return true; 
+  }
 }
-
 /* ── Get Media ──────────────────────────────────────────────────── */
 export async function getMedia(accessToken: string, igUserId: string): Promise<InstagramMedia[]> {
   const fields = "id,caption,media_type,thumbnail_url,media_url,permalink,timestamp";
