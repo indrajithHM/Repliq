@@ -114,31 +114,31 @@ export async function replyToComment(
 
 /* ── Check Follower Status (FIXED) ──────────────────────────────── */
 export async function checkFollower(
-  accessToken: string, 
-  igUserId: string, 
-  targetIgId: string
+  accessToken: string,
+  igUserId: string,
+  targetIgId: string  // IGSID from messaging event
 ): Promise<boolean> {
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${targetIgId}?fields=follows_business&access_token=${accessToken}`
-    );
-    
+    const url = new URL(`https://graph.instagram.com/v21.0/${igUserId}/messages`);
+    url.searchParams.set("fields", "is_user_follow_business");
+    url.searchParams.set("user_id", targetIgId);
+    url.searchParams.set("access_token", accessToken);
+
+    const res  = await fetch(url.toString());
     const data = await res.json();
-    
-    // Check if Meta returned an API error (like the nonexisting field error)
+
     if (!res.ok || data.error) {
       console.warn(
-        "⚠️ checkFollower API bypassed (Missing Advanced Access):", 
-        data.error?.message || "Unknown API Error"
+        "⚠️ checkFollower API bypassed:",
+        data.error?.message ?? "Unknown API error"
       );
-      // Fallback to true so genuine users don't get trapped in a "Not Following" loop
-      return true; 
+      return true;
     }
-    
-    return !!data.follows_business;
+
+    return !!data.is_user_follow_business;
   } catch (error) {
     console.error("❌ checkFollower network/runtime error:", error);
-    return true; 
+    return true;
   }
 }
 /* ── Get Media ──────────────────────────────────────────────────── */

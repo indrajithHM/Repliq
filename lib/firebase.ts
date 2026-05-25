@@ -144,6 +144,7 @@ export const alreadyDmed = async (uid: string, commenterId: string, postId: stri
 };
 
 /* ── Pending ─────────────────────────────────────────────────────── */
+/* ── Pending ─────────────────────────────────────────────────────── */
 export type PendingState =
   | "awaiting_link_request"
   | "awaiting_follow_confirm"
@@ -154,12 +155,13 @@ export interface PendingEntry {
   commenterId:       string;
   commenterUsername: string;
   postId:            string;
-  commentId?:        string;   // original comment_id — used to open DM window
+  commentId?:        string;
   ruleId:            string;
   uid:               string;
   state:             PendingState;
   savedAt:           number;
   expiresAt:         number;
+  igSid?:            string; // IGSID captured from first messaging event
 }
 
 export const savePending = (uid: string, e: Omit<PendingEntry, "id">) =>
@@ -172,6 +174,19 @@ export const getPendingByCommenter = async (uid: string, commenterId: string) =>
     .find(([, v]) => v.commenterId === commenterId && v.expiresAt > Date.now());
   return match ? { ...match[1], id: match[0] } : null;
 };
+
+// Look up pending by IGSID (set when user first taps quick reply)
+export const getPendingByIgSid = async (uid: string, igSid: string) => {
+  const s = await get(ref(getDb(), `users/${uid}/pending`));
+  if (!s.exists()) return null;
+  const match = Object.entries(s.val() as Record<string, PendingEntry>)
+    .find(([, v]) => v.igSid === igSid && v.expiresAt > Date.now());
+  return match ? { ...match[1], id: match[0] } : null;
+};
+
+// Save IGSID into pending entry on first messaging event
+export const setPendingIgSid = (uid: string, pendingId: string, igSid: string) =>
+  update(ref(getDb(), `users/${uid}/pending/${pendingId}`), { igSid });
 
 export const updatePendingState = (uid: string, pendingId: string, state: PendingState) =>
   update(ref(getDb(), `users/${uid}/pending/${pendingId}`), { state });

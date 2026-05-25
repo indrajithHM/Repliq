@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import {
   getToken, getRules, alreadyDmed, logDm,
-  savePending, getPendingByCommenter, deletePending, updatePendingState,
-  findUidByIgUserId, Rule, IgToken, PendingEntry,
+  savePending, getPendingByCommenter, getPendingByIgSid, setPendingIgSid,
+  deletePending, updatePendingState,
+  findUidByIgUserId, Rule, IgToken,
 } from "@/lib/firebase";
 import { sendDm, matchComment, replyToComment, checkFollower, DMButton } from "@/lib/instagram";
 
@@ -25,7 +26,6 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   console.log("→ Webhook received:", rawBody.slice(0, 300));
 
-  // Fallback array mapping to cover edge/serverless platform lowercasing headers behavior
   const sig = req.headers.get("x-hub-signature-256") || req.headers.get("X-Hub-Signature-256") || "";
   const expected = "sha256=" +
     crypto.createHmac("sha256", process.env.META_APP_SECRET!)
@@ -131,7 +131,6 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   const alreadySent = await alreadyDmed(uid, commenterId, postId);
   if (alreadySent) { console.log("→ Already DMed, skipping"); return; }
 
-  // LOCK STEP: Instantly write state tracking item to minimize potential duplication windows
   await savePending(uid, {
     uid,
     commenterId,
@@ -143,16 +142,6 @@ async function handleComment(value: CommentPayload, igPageId: string) {
     savedAt: Date.now(),
     expiresAt: Date.now() + (matched.pendingExpiry ?? 48) * 60 * 60 * 1000,
   });
-
-  // Reply to the comment publicly (if enabled on the rule)
-  if (matched.replyEnabled && matched.replyTemplate && commentId) {
-    try {
-      await replyToComment(token.access_token, commentId, matched.replyTemplate);
-      console.log("→ Comment reply sent");
-    } catch (e) {
-      console.error("→ Comment reply failed:", e);
-    }
-  }
 
   const engagementText = `Hey! Thanks for your interest 😊\nTap below and I'll send you the link ✨`;
 
@@ -170,6 +159,17 @@ async function handleComment(value: CommentPayload, igPageId: string) {
       ],
     );
     console.log("→ Engagement DM sent via comment_id");
+
+    // ✅ Reply to comment ONLY after engagement DM succeeds
+    if (matched.replyEnabled && matched.replyTemplate && commentId) {
+      try {
+        await replyToComment(token.access_token, commentId, matched.replyTemplate);
+        console.log("→ Public comment reply sent");
+      } catch (e) {
+        console.error("→ Public comment reply failed:", e);
+      }
+    }
+
     await logDm(uid, {
       commenterId, commenterUsername, postId,
       postUrl: matched.postUrl ?? "",
@@ -191,7 +191,7 @@ async function handleComment(value: CommentPayload, igPageId: string) {
 
 /* ── Quick Reply handler ────────────────────────────────────────── */
 async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
-  const senderId = msg.sender.id;
+  const senderId = msg.sender.id; // IGSID
   const payload  = msg.message?.quick_reply?.payload ?? "";
   console.log("→ handleQuickReply:", { senderId, payload });
 
@@ -200,25 +200,31 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
   const token = await getToken(uid);
   if (!token) return;
 
-  const pending = await getPendingByCommenter(uid, senderId);
+  // Try lookup by IGSID first (repeat interactions), then fall back to commenterId
+  let pending = await getPendingByIgSid(uid, senderId);
+  if (!pending) pending = await getPendingByCommenter(uid, senderId);
   if (!pending) { console.log("→ No pending entry for sender"); return; }
+
+  // First time we see their IGSID — save it so handleFollow can find them later
+  if (!pending.igSid) {
+    await setPendingIgSid(uid, pending.id!, senderId);
+    pending.igSid = senderId;
+  }
+
   console.log("→ Pending entry:", { ruleId: pending.ruleId, state: pending.state, postId: pending.postId });
 
   const rules = await getRules(uid);
-  console.log("→ Available rule IDs:", rules.map(r => r.id));
   const rule  = rules.find(r => r.id === pending.ruleId);
   if (!rule) {
-    console.log("→ Rule not found. Payload ruleId:", payload.split(":")[1], "Pending ruleId:", pending.ruleId);
+    console.log("→ Rule not found. Pending ruleId:", pending.ruleId);
     return;
   }
 
   /* ── "Send me the link" tapped ── */
   if (payload.startsWith("SEND_LINK:")) {
-    const ruleId = payload.slice("SEND_LINK:".length);
-    console.log("→ SEND_LINK ruleId:", ruleId);
-
+    const ruleId     = payload.slice("SEND_LINK:".length);
     const activeRule = rules.find(r => r.id === ruleId) ?? rule;
-    if (!activeRule) { console.log("→ No rule found for payload or pending"); return; }
+    console.log("→ SEND_LINK ruleId:", ruleId);
 
     let isFollower = false;
     try {
@@ -248,11 +254,9 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
 
   /* ── "I'm following" tapped ── */
   if (payload.startsWith("FOLLOW_CONFIRM:")) {
-    const ruleId = payload.slice("FOLLOW_CONFIRM:".length);
-    console.log("→ FOLLOW_CONFIRM ruleId:", ruleId);
-
+    const ruleId      = payload.slice("FOLLOW_CONFIRM:".length);
     const confirmRule = rules.find(r => r.id === ruleId) ?? rule;
-    if (!confirmRule) { console.log("→ No rule found for FOLLOW_CONFIRM"); return; }
+    console.log("→ FOLLOW_CONFIRM ruleId:", ruleId);
 
     let isFollower = false;
     try {
@@ -271,8 +275,8 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
         { id: senderId },
         `You're still not following @${token.ig_username} 🙏\nPlease follow and tap the button again!`,
         [
-          { type: "url" as const,           label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
-          { type: "quick_reply" as const,   label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${confirmRule.id}` },
+          { type: "url" as const,         label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
+          { type: "quick_reply" as const, label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${confirmRule.id}` },
         ],
       );
       console.log("→ Reprompt sent");
@@ -287,13 +291,32 @@ async function handleFollow(followerId: string, igPageId: string) {
   if (!uid) return;
   const token = await getToken(uid);
   if (!token) return;
-  const pending = await getPendingByCommenter(uid, followerId);
-  if (!pending) return;
+
+  // Look up by IGSID since followerId from messaging event matches igSid, not commenterId
+  const pending = await getPendingByIgSid(uid, followerId);
+  if (!pending) {
+    console.log("→ No pending entry found for IGSID:", followerId);
+    return;
+  }
 
   if (pending.state === "awaiting_follow_confirm") {
+    let isFollower = false;
+    try {
+      isFollower = await checkFollower(token.access_token, token.ig_user_id, followerId);
+    } catch (e) {
+      console.error("→ checkFollower error in handleFollow:", e);
+      isFollower = true;
+    }
+
+    if (!isFollower) {
+      console.log("→ Follow event received but API says not following yet, ignoring");
+      return;
+    }
+
     const rules = await getRules(uid);
     const rule  = rules.find(r => r.id === pending.ruleId);
     if (!rule) return;
+
     await deliverActualDm(uid, token, followerId, pending.commenterUsername, pending.postId, rule);
     await deletePending(uid, pending.id!);
   }
@@ -306,15 +329,6 @@ async function deliverActualDm(
   postId: string, rule: Rule,
   commentId?: string,
 ) {
-  if (rule.replyEnabled && rule.replyTemplate && commentId) {
-    try {
-      await replyToComment(token.access_token, commentId, rule.replyTemplate);
-      console.log("→ Comment reply sent");
-    } catch (e) {
-      console.error("→ Comment reply failed:", e);
-    }
-  }
-
   const buttons: DMButton[] = [];
   if (rule.ctaEnabled && rule.ctaLabel && rule.ctaUrl) {
     buttons.push({ type: "url", label: rule.ctaLabel, url: rule.ctaUrl });
@@ -361,8 +375,8 @@ async function sendFollowGateDm(token: IgToken, senderId: string, rule: Rule) {
     { id: senderId },
     `Looks like you're not following @${token.ig_username} yet 👀\nFollow us and tap the button below to get your link!`,
     [
-      { type: "url" as const,           label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
-      { type: "quick_reply" as const,   label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${rule.id}` },
+      { type: "url" as const,         label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
+      { type: "quick_reply" as const, label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${rule.id}` },
     ],
   );
 }
