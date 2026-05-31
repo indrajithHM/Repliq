@@ -116,28 +116,30 @@ export async function replyToComment(
 export async function checkFollower(
   accessToken: string,
   igUserId: string,
-  targetIgId: string  // IGSID from messaging event
+  targetIgId: string
 ): Promise<boolean> {
   try {
-    const url = new URL(`https://graph.instagram.com/v21.0/${igUserId}/messages`);
-    url.searchParams.set("fields", "is_user_follow_business");
+    const url = new URL(`https://graph.instagram.com/v21.0/${igUserId}/conversations`);
+    url.searchParams.set("platform", "instagram");
     url.searchParams.set("user_id", targetIgId);
+    url.searchParams.set("fields", "is_user_follow_business");
     url.searchParams.set("access_token", accessToken);
 
     const res  = await fetch(url.toString());
     const data = await res.json();
 
+    console.log("→ checkFollower raw response:", JSON.stringify(data));
+
     if (!res.ok || data.error) {
-      console.warn(
-        "⚠️ checkFollower API bypassed:",
-        data.error?.message ?? "Unknown API error"
-      );
-      return true;
+      console.warn("⚠️ checkFollower API error:", data.error?.message ?? "Unknown");
+      return true; // fail open
     }
 
-    return !!data.is_user_follow_business;
+    // Response is { data: [{ is_user_follow_business: true/false }] }
+    const conversation = data.data?.[0];
+    return !!conversation?.is_user_follow_business;
   } catch (error) {
-    console.error("❌ checkFollower network/runtime error:", error);
+    console.error("❌ checkFollower error:", error);
     return true;
   }
 }
