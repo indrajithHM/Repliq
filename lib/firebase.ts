@@ -238,7 +238,7 @@ export const getGroups = async (uid: string): Promise<BioGroup[]> => {
   const s = await get(ref(getDb(), `users/${uid}/biopage/groups`));
   if (!s.exists()) return [];
   return Object.entries(s.val() as Record<string, BioGroup>)
-    .map(([id, v]) => ({ ...v, id })).sort((a, b) => a.order - b.order);
+    .map(([id, v]) => ({ ...v, id })).sort((a, b) => b.order - a.order);
 };
 
 /* ── Group Links CRUD ────────────────────────────────────────────── */
