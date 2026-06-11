@@ -142,6 +142,7 @@ export async function checkFollower(
     console.error("❌ checkFollower error:", error);
     return true;
   }
+  return true;
 }
 /* ── Get Media ──────────────────────────────────────────────────── */
 export async function getMedia(accessToken: string, igUserId: string): Promise<InstagramMedia[]> {

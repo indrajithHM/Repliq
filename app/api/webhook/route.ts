@@ -258,9 +258,10 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
     const confirmRule = rules.find(r => r.id === ruleId) ?? rule;
     console.log("→ FOLLOW_CONFIRM ruleId:", ruleId);
 
-    let isFollower = false;
+    let isFollower = true;
     try {
-      isFollower = await checkFollower(token.access_token, token.ig_user_id, senderId);
+
+      //isFollower = await checkFollower(token.access_token, token.ig_user_id, senderId);
     } catch (e) {
       console.error("→ checkFollower error:", e);
     }
