@@ -56,14 +56,19 @@ export async function POST(req: NextRequest) {
         );
       }
       // NOTE: "follow" field change events are no longer used to drive delivery.
-      // Delivery now happens purely from the "I'm following" quick-reply tap.
+      // Delivery now happens purely from the "I'm following" button tap.
     }
 
     for (const msg of (entry.messaging ?? []) as MessagingEvent[]) {
-      if (msg.message?.quick_reply?.payload) {
+      // Instagram can deliver a button tap as either message.quick_reply
+      // OR as a top-level postback event, depending on the button setup.
+      // Handle both so taps are never silently dropped.
+      const payload = msg.message?.quick_reply?.payload ?? msg.postback?.payload;
+      if (payload) {
         await handleQuickReply(msg, igPageId).catch(console.error);
       }
-      // NOTE: msg.follow webhook event intentionally ignored now — see handleQuickReply.
+      // NOTE: msg.follow webhook event intentionally ignored now — delivery
+      // is driven solely by the button taps handled above.
     }
   }
 
@@ -85,6 +90,11 @@ interface MessagingEvent {
   message?:   {
     text?:        string;
     quick_reply?: { payload: string };
+  };
+  postback?: {
+    title?:   string;
+    payload:  string;
+    mid?:     string;
   };
   follow?: boolean;
 }
@@ -182,10 +192,10 @@ async function handleComment(value: CommentPayload, igPageId: string) {
   }
 }
 
-/* ── Quick Reply handler ────────────────────────────────────────── */
+/* ── Quick Reply / Postback handler ─────────────────────────────── */
 async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
   const senderId = msg.sender.id; // IGSID
-  const payload  = msg.message?.quick_reply?.payload ?? "";
+  const payload  = msg.message?.quick_reply?.payload ?? msg.postback?.payload ?? "";
   console.log("→ handleQuickReply:", { senderId, payload });
 
   const uid = await findUidByIgUserId(igPageId);
