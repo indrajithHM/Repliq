@@ -7,7 +7,7 @@ import {
   deletePending, updatePendingState,
   findUidByIgUserId, Rule, IgToken,
 } from "@/lib/firebase";
-import { sendDm, matchComment, replyToComment, checkFollower, DMButton } from "@/lib/instagram";
+import { sendDm, matchComment, replyToComment, DMButton } from "@/lib/instagram";
 
 /* ── GET: webhook verification ─────────────────────────────────── */
 export async function GET(req: NextRequest) {
@@ -55,22 +55,15 @@ export async function POST(req: NextRequest) {
           console.error("→ handleComment error:", e)
         );
       }
-      if (change.field === "follow") {
-        const v = change.value as { new_follower?: string; follower_id?: string };
-        const followerId = v.new_follower ?? v.follower_id ?? "";
-        if (followerId) await handleFollow(followerId, igPageId).catch(e =>
-          console.error("→ handleFollow error:", e)
-        );
-      }
+      // NOTE: "follow" field change events are no longer used to drive delivery.
+      // Delivery now happens purely from the "I'm following" quick-reply tap.
     }
 
     for (const msg of (entry.messaging ?? []) as MessagingEvent[]) {
       if (msg.message?.quick_reply?.payload) {
         await handleQuickReply(msg, igPageId).catch(console.error);
       }
-      if (msg.follow) {
-        await handleFollow(msg.sender.id, igPageId).catch(console.error);
-      }
+      // NOTE: msg.follow webhook event intentionally ignored now — see handleQuickReply.
     }
   }
 
@@ -205,7 +198,7 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
   if (!pending) pending = await getPendingByCommenter(uid, senderId);
   if (!pending) { console.log("→ No pending entry for sender"); return; }
 
-  // First time we see their IGSID — save it so handleFollow can find them later
+  // First time we see their IGSID — save it so future lookups work
   if (!pending.igSid) {
     await setPendingIgSid(uid, pending.id!, senderId);
     pending.igSid = senderId;
@@ -220,106 +213,32 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
     return;
   }
 
-  /* ── "Send me the link" tapped ── */
+  /* ── "Send me the link" tapped → show follow gate, no follower check ── */
   if (payload.startsWith("SEND_LINK:")) {
     const ruleId     = payload.slice("SEND_LINK:".length);
     const activeRule = rules.find(r => r.id === ruleId) ?? rule;
     console.log("→ SEND_LINK ruleId:", ruleId);
 
-    let isFollower = false;
-    try {
-      isFollower = await checkFollower(token.access_token, token.ig_user_id, senderId);
-    } catch (e) {
-      console.error("→ checkFollower error:", e);
-    }
-    console.log("→ Is follower:", isFollower);
-
-    if (isFollower) {
-      await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, activeRule);
-      await deletePending(uid, pending.id!);
-    } else {
-      await updatePendingState(uid, pending.id!, "awaiting_follow_confirm");
-      await sendFollowGateDm(token, senderId, activeRule);
-      await logDm(uid, {
-        commenterId: senderId,
-        commenterUsername: pending.commenterUsername,
-        postId: pending.postId,
-        postUrl: activeRule.postUrl ?? "",
-        postShortcode: shortcodeFrom(activeRule.postUrl),
-        ruleId: activeRule.id!, sentAt: Date.now(),
-        status: "sent", type: "follow_gate",
-      });
-    }
+    await updatePendingState(uid, pending.id!, "awaiting_follow_confirm");
+    await sendFollowGateDm(token, senderId, activeRule);
+    await logDm(uid, {
+      commenterId: senderId,
+      commenterUsername: pending.commenterUsername,
+      postId: pending.postId,
+      postUrl: activeRule.postUrl ?? "",
+      postShortcode: shortcodeFrom(activeRule.postUrl),
+      ruleId: activeRule.id!, sentAt: Date.now(),
+      status: "sent", type: "follow_gate",
+    });
   }
 
-  /* ── "I'm following" tapped ── */
+  /* ── "I'm following" tapped → deliver actual DM, no check ── */
   if (payload.startsWith("FOLLOW_CONFIRM:")) {
     const ruleId      = payload.slice("FOLLOW_CONFIRM:".length);
     const confirmRule = rules.find(r => r.id === ruleId) ?? rule;
     console.log("→ FOLLOW_CONFIRM ruleId:", ruleId);
 
-    let isFollower = true;
-    try {
-
-      //isFollower = await checkFollower(token.access_token, token.ig_user_id, senderId);
-    } catch (e) {
-      console.error("→ checkFollower error:", e);
-    }
-    console.log("→ Follow confirm check:", isFollower);
-
-    if (!isFollower) {
-      await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, confirmRule);
-      await deletePending(uid, pending.id!);
-    } else {
-      await safeSendDm(
-        token,
-        { id: senderId },
-        `If you're not following @${token.ig_username} yet 👀\nFollow us and tap the button below to get your link!`,
-        [
-          { type: "url" as const,         label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
-          { type: "quick_reply" as const, label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${confirmRule.id}` },
-        ],
-      );
-      console.log("→ Reprompt sent");
-    }
-  }
-}
-
-/* ── Follow handler ─────────────────────────────────────────────── */
-async function handleFollow(followerId: string, igPageId: string) {
-  console.log("→ handleFollow:", { followerId, igPageId });
-  //let isFollower = true;
-  const uid = await findUidByIgUserId(igPageId);
-  if (!uid) return;
-  const token = await getToken(uid);
-  if (!token) return;
-
-  // Look up by IGSID since followerId from messaging event matches igSid, not commenterId
-  const pending = await getPendingByIgSid(uid, followerId);
-  if (!pending) {
-    console.log("→ No pending entry found for IGSID:", followerId);
-    return;
-  }
-
-  if (pending.state === "awaiting_follow_confirm") {
-    let isFollower = false;
-    try {
-      isFollower = true;// await checkFollower(token.access_token, token.ig_user_id, followerId);
-    } catch (e) {
-      console.error("→ checkFollower error in handleFollow:", e);
-      isFollower = true;
-    }
-
-    if (!isFollower) {
-      console.log("→ Follow event received but API says not following yet, ignoring");
-      return;
-    }
-
-    const rules = await getRules(uid);
-    const rule  = rules.find(r => r.id === pending.ruleId);
-    if (!rule) return;
-
-    await deliverActualDm(uid, token, followerId, pending.commenterUsername, pending.postId, rule);
+    await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, confirmRule);
     await deletePending(uid, pending.id!);
   }
 }
@@ -329,7 +248,6 @@ async function deliverActualDm(
   uid: string, token: IgToken,
   commenterId: string, commenterUsername: string,
   postId: string, rule: Rule,
-  commentId?: string,
 ) {
   const buttons: DMButton[] = [];
   if (rule.ctaEnabled && rule.ctaLabel && rule.ctaUrl) {
