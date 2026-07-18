@@ -267,14 +267,14 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
     }
     console.log("→ Follow confirm check:", isFollower);
 
-    if (isFollower) {
+    if (!isFollower) {
       await deliverActualDm(uid, token, senderId, pending.commenterUsername, pending.postId, confirmRule);
       await deletePending(uid, pending.id!);
     } else {
       await safeSendDm(
         token,
         { id: senderId },
-        `You're still not following @${token.ig_username} 🙏\nPlease follow and tap the button again!`,
+        `If you're not following @${token.ig_username} yet 👀\nFollow us and tap the button below to get your link!`,
         [
           { type: "url" as const,         label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
           { type: "quick_reply" as const, label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${confirmRule.id}` },
@@ -288,6 +288,7 @@ async function handleQuickReply(msg: MessagingEvent, igPageId: string) {
 /* ── Follow handler ─────────────────────────────────────────────── */
 async function handleFollow(followerId: string, igPageId: string) {
   console.log("→ handleFollow:", { followerId, igPageId });
+  //let isFollower = true;
   const uid = await findUidByIgUserId(igPageId);
   if (!uid) return;
   const token = await getToken(uid);
@@ -303,7 +304,7 @@ async function handleFollow(followerId: string, igPageId: string) {
   if (pending.state === "awaiting_follow_confirm") {
     let isFollower = false;
     try {
-      isFollower = await checkFollower(token.access_token, token.ig_user_id, followerId);
+      isFollower = true;// await checkFollower(token.access_token, token.ig_user_id, followerId);
     } catch (e) {
       console.error("→ checkFollower error in handleFollow:", e);
       isFollower = true;
@@ -374,7 +375,7 @@ async function sendFollowGateDm(token: IgToken, senderId: string, rule: Rule) {
   await safeSendDm(
     token,
     { id: senderId },
-    `Looks like you're not following @${token.ig_username} yet 👀\nFollow us and tap the button below to get your link!`,
+    `If you're not following @${token.ig_username} yet 👀\nFollow us and tap the button below to get your link!`,
     [
       { type: "url" as const,         label: `Follow @${token.ig_username}`, url: `https://www.instagram.com/${token.ig_username}/` },
       { type: "quick_reply" as const, label: "I'm following ✅",             payload: `FOLLOW_CONFIRM:${rule.id}` },
