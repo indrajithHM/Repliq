@@ -69,6 +69,23 @@ export const getToken = async (uid: string): Promise<IgToken | null> => {
 export const deleteToken = (uid: string) =>
   remove(ref(getDb(), `users/${uid}/tokens`));
 
+// Patch just the refreshed fields (access_token, expires_at) without touching the rest
+export const updateToken = (uid: string, data: Partial<IgToken>) =>
+  update(ref(getDb(), `users/${uid}/tokens`), data);
+
+// Returns every user's token, keyed by uid — used by the refresh cron job
+export const getAllTokens = async (): Promise<{ uid: string; token: IgToken }[]> => {
+  const s = await get(ref(getDb(), "users"));
+  if (!s.exists()) return [];
+  const out: { uid: string; token: IgToken }[] = [];
+  for (const [uid, data] of Object.entries(
+    s.val() as Record<string, { tokens?: IgToken }>
+  )) {
+    if (data.tokens) out.push({ uid, token: data.tokens });
+  }
+  return out;
+};
+
 /* ── Rules ──────────────────────────────────────────────────────── */
 export type MatchMode = "any_comment" | "word_match" | "exact_match";
 
@@ -143,7 +160,6 @@ export const alreadyDmed = async (uid: string, commenterId: string, postId: stri
   );
 };
 
-/* ── Pending ─────────────────────────────────────────────────────── */
 /* ── Pending ─────────────────────────────────────────────────────── */
 export type PendingState =
   | "awaiting_link_request"
